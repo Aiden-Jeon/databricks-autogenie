@@ -1,0 +1,155 @@
+# Pattern Extraction from Benchmarks
+
+You are extracting SQL query patterns from benchmarks to create parameterized sample queries (example_question_sqls).
+
+═══════════════════════════════════════════════════════════════════════════════
+## TASK
+═══════════════════════════════════════════════════════════════════════════════
+
+Analyze ALL benchmark SQLs and:
+1. Group similar queries by structural pattern
+2. Create parameterized templates for each pattern group
+3. Generate Korean question templates
+
+═══════════════════════════════════════════════════════════════════════════════
+## INPUT: ALL BENCHMARKS
+═══════════════════════════════════════════════════════════════════════════════
+
+{benchmarks}
+
+═══════════════════════════════════════════════════════════════════════════════
+## PATTERN CATEGORIES
+═══════════════════════════════════════════════════════════════════════════════
+
+### Pattern 1: Top N by Metric
+Questions like: "가장 많은", "상위 N개", "Top N"
+```sql
+SELECT :group_col, SUM(:metric) as total
+FROM :table
+GROUP BY :group_col
+ORDER BY total DESC
+LIMIT :n
+```
+
+### Pattern 2: Date Range Filter
+Questions like: "최근 7일", "지난 달", "기간별"
+```sql
+SELECT :columns
+FROM :table
+WHERE :date_col >= CURRENT_DATE - INTERVAL :n DAYS
+```
+
+### Pattern 3: Trend/Time Series
+Questions like: "추이", "일별", "트렌드"
+```sql
+SELECT DATE(:date_col) as date, SUM(:metric) as total
+FROM :table
+GROUP BY DATE(:date_col)
+ORDER BY date
+```
+
+### Pattern 4: Comparison (Platform/Game)
+Questions like: "비교", "차이", "vs"
+```sql
+SELECT :group_col, SUM(:metric) as total
+FROM :table
+GROUP BY :group_col
+```
+
+### Pattern 5: Aggregation with Join
+Questions combining entities: "채널별 메시지", "게임별 리뷰"
+```sql
+SELECT t1.:col, SUM(t2.:metric) as total
+FROM :table1 t1
+JOIN :table2 t2 ON t1.:key = t2.:key
+GROUP BY t1.:col
+```
+
+### Pattern 6: Latest Record (Deduplication)
+For snapshot tables with event_date
+```sql
+WITH latest AS (
+  SELECT *, ROW_NUMBER() OVER (PARTITION BY :entity_id ORDER BY event_date DESC) as rn
+  FROM :table
+)
+SELECT * FROM latest WHERE rn = 1
+```
+
+═══════════════════════════════════════════════════════════════════════════════
+## EXTRACTION PROCESS
+═══════════════════════════════════════════════════════════════════════════════
+
+1. **Cluster**: Group benchmarks with similar SQL structure
+2. **Abstract**: Replace specific values with `:parameters`
+3. **Template**: Create Korean question template with [placeholders]
+4. **Guidance**: Add usage guidance for when to apply pattern
+
+═══════════════════════════════════════════════════════════════════════════════
+## OUTPUT FORMAT
+═══════════════════════════════════════════════════════════════════════════════
+
+Return JSON:
+
+```json
+{{
+  "extraction_summary": {{
+    "total_benchmarks_analyzed": 20,
+    "patterns_identified": <number>,
+    "benchmarks_per_pattern": {{"top_n": 5, "date_range": 8, ...}}
+  }},
+  "sample_queries": [
+    {{
+      "pattern_name": "top_n_by_metric",
+      "question": ["[지표] 기준 상위 N개 조회"],
+      "sql": [
+        "SELECT :group_col, SUM(:metric_col) as total ",
+        "FROM :table ",
+        "WHERE :date_col >= CURRENT_DATE - INTERVAL :days DAYS ",
+        "GROUP BY :group_col ",
+        "ORDER BY total DESC ",
+        "LIMIT :n"
+      ],
+      "parameters": [
+        {{"name": "group_col", "type_hint": "STRING", "description": ["그룹화할 컬럼"]}},
+        {{"name": "metric_col", "type_hint": "STRING", "description": ["집계할 지표 컬럼"]}},
+        {{"name": "table", "type_hint": "STRING", "description": ["조회할 테이블"]}},
+        {{"name": "date_col", "type_hint": "STRING", "description": ["날짜 필터 컬럼"]}},
+        {{"name": "days", "type_hint": "INTEGER", "description": ["조회 기간 (일)"]}},
+        {{"name": "n", "type_hint": "INTEGER", "description": ["결과 개수"]}}
+      ],
+      "usage_guidance": ["'가장 많은', '상위', 'Top N' 질문에 사용"],
+      "source_benchmarks": ["benchmark_id_1", "benchmark_id_2"]
+    }},
+    {{
+      "pattern_name": "daily_trend",
+      "question": ["[기간] 동안 일별 [지표] 추이"],
+      "sql": [
+        "SELECT DATE(:date_col) as date, SUM(:metric_col) as total ",
+        "FROM :table ",
+        "WHERE :date_col >= CURRENT_DATE - INTERVAL :days DAYS ",
+        "GROUP BY DATE(:date_col) ",
+        "ORDER BY date"
+      ],
+      "parameters": [
+        {{"name": "date_col", "type_hint": "STRING", "description": ["날짜 컬럼"]}},
+        {{"name": "metric_col", "type_hint": "STRING", "description": ["집계할 지표"]}},
+        {{"name": "table", "type_hint": "STRING", "description": ["테이블명"]}},
+        {{"name": "days", "type_hint": "INTEGER", "description": ["조회 기간"]}}
+      ],
+      "usage_guidance": ["'추이', '트렌드', '일별' 질문에 사용"],
+      "source_benchmarks": ["benchmark_id_8"]
+    }}
+  ]
+}}
+```
+
+═══════════════════════════════════════════════════════════════════════════════
+## IMPORTANT
+═══════════════════════════════════════════════════════════════════════════════
+
+- Create ONE template per pattern (don't duplicate similar patterns)
+- Make templates GENERAL enough to apply to multiple questions
+- Include ALL parameters needed for flexibility
+- SQL must use Spark SQL syntax (DATE 'YYYY-MM-DD', single quotes for strings)
+- SQL lines should end with space for proper formatting
+- Return ONLY valid JSON, no additional text

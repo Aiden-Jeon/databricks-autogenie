@@ -1,0 +1,106 @@
+# Databricks Asset Bundle Configuration for AutoGenie
+# Deploy: databricks bundle deploy --target dev
+
+bundle:
+  name: autogenie
+
+sync:
+  exclude:
+    # Virtual environments
+    - ".venv"
+    - "venv"
+    - "ENV"
+    - "env"
+
+    # Node modules and frontend build cache
+    - "frontend/node_modules"
+    - "frontend/.next"
+
+    # Local storage and runtime data
+    - "storage"
+    - "output"
+
+    # Git and development
+    - ".git"
+    - ".databricks"
+    - "worktrees"
+
+    # Python bytecode
+    - "__pycache__"
+    - "*.pyc"
+    - "*.pyo"
+    - "*.pyd"
+
+    # Environment and secrets
+    - ".env"
+    - ".env.local"
+
+    # Cache and temporary files
+    - "*.log"
+    - "*.pid"
+    - ".parse_cache.json"
+
+    # IDE and OS
+    - ".vscode"
+    - ".idea"
+    - ".DS_Store"
+
+    # Non-source assets
+    - "docs"
+    - "presentations"
+    - "generate_demo"
+    - ".claude"
+
+
+resources:
+  apps:
+    autogenie_app:
+      name: autogenie
+      description: AutoGenie - Create and enhance Databricks Genie Spaces with AI-powered automation
+      permissions:
+        - group_name: users
+          level: CAN_USE
+
+variables:
+  app_service_principal_id:
+    description: "Service principal ID of the deployed app (set after first deployment)"
+    default: ""
+
+# Target environments
+targets:
+  default:
+    default: true
+    workspace:
+      host: https://<your-workspace>.cloud.databricks.com/
+      profile: <your-profile>
+    variables:
+      app_service_principal_id: ""
+    resources:
+      apps:
+        autogenie_app:
+          name: autogenie
+          source_code_path: ${workspace.file_path}
+          # User authorization scopes - required for OBO token to access UC and SQL
+          user_api_scopes:
+            - sql
+            - catalog.tables:read
+            - catalog.schemas:read
+            - catalog.catalogs:read
+            - dashboards.genie
+          # Grant app SP access to resources
+          resources:
+            - name: "validation-warehouse"
+              description: "SQL Warehouse for validation and scoring"
+              sql_warehouse:
+                id: "<your-warehouse-id>"
+                permission: "CAN_USE"
+            - name: "databricks-gpt-5-2"
+              description: "LLM endpoint for text generation"
+              serving_endpoint:
+                name: "databricks-gpt-5-2"
+                permission: "CAN_QUERY"
+            - name: "databricks-claude-sonnet-4"
+              description: "Vision model endpoint for PDF parsing"
+              serving_endpoint:
+                name: "databricks-claude-sonnet-4"
+                permission: "CAN_QUERY"

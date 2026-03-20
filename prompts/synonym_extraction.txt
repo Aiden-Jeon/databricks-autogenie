@@ -1,0 +1,100 @@
+# Synonym Extraction from Benchmarks
+
+You are extracting Korean term → SQL column mappings from benchmark Q&A pairs.
+
+═══════════════════════════════════════════════════════════════════════════════
+## TASK
+═══════════════════════════════════════════════════════════════════════════════
+
+Analyze ALL benchmarks and identify:
+1. Korean terms users use in questions
+2. Which SQL columns those terms refer to
+3. Generate synonym mappings for Genie Space
+
+═══════════════════════════════════════════════════════════════════════════════
+## INPUT: ALL BENCHMARKS
+═══════════════════════════════════════════════════════════════════════════════
+
+{benchmarks}
+
+═══════════════════════════════════════════════════════════════════════════════
+## EXTRACTION RULES
+═══════════════════════════════════════════════════════════════════════════════
+
+### What to Extract
+
+For each Korean term that appears in questions, find which column it maps to:
+
+| Korean Term | Maps To | Example |
+|-------------|---------|---------|
+| 리액션 | reaction.count | "리액션이 가장 많은" → SUM(r.count) |
+| 메시지 | message table | "디스코드 메시지" → message.message_id |
+| 추천 | votes_up | "추천 수가 높은" → votes_up |
+| 댓글 | comment | "댓글이 많이 달린" → COUNT(comment_id) |
+| 활발한 | activity calculation | "활발한 채널" → activity_score |
+
+### Term Categories
+
+1. **Entity terms**: 메시지, 리뷰, 토픽, 채널, 사용자
+2. **Metric terms**: 리액션, 추천, 댓글, 활동
+3. **Platform terms**: 디스코드, 스팀
+4. **Time terms**: 최근, 일주일, 30일
+5. **Ranking terms**: 가장 많은, 상위, 높은
+
+### Extraction Guidelines
+
+- Look at ALL benchmarks together to find patterns
+- One Korean term may map to multiple columns (context-dependent)
+- Include common variations (리액션/반응, 추천/업보트)
+- Extract from `korean_question` field, NOT `question`
+
+═══════════════════════════════════════════════════════════════════════════════
+## OUTPUT FORMAT
+═══════════════════════════════════════════════════════════════════════════════
+
+Return JSON:
+
+```json
+{{
+  "extraction_summary": {{
+    "total_benchmarks_analyzed": 20,
+    "unique_korean_terms_found": <number>,
+    "unique_columns_mapped": <number>
+  }},
+  "synonyms": [
+    {{
+      "table": "sandbox.agent_poc.reaction",
+      "column": "count",
+      "synonyms": ["리액션", "리액션 수", "반응"],
+      "context": "Used when asking about message reactions"
+    }},
+    {{
+      "table": "sandbox.agent_poc.store_appreviews",
+      "column": "votes_up",
+      "synonyms": ["추천", "추천 수", "업보트", "좋아요"],
+      "context": "Used when asking about Steam review upvotes"
+    }},
+    {{
+      "table": "sandbox.agent_poc.message",
+      "column": "message_id",
+      "synonyms": ["메시지", "글"],
+      "context": "Discord message identifier"
+    }},
+    {{
+      "table": "sandbox.agent_poc.channel_list",
+      "column": "channel_name",
+      "synonyms": ["채널"],
+      "context": "Discord channel name"
+    }}
+  ]
+}}
+```
+
+═══════════════════════════════════════════════════════════════════════════════
+## IMPORTANT
+═══════════════════════════════════════════════════════════════════════════════
+
+- Extract ALL synonym mappings you can find
+- Include table name in full format: `catalog.schema.table`
+- Be thorough - missing synonyms cause Genie failures
+- Return ONLY valid JSON, no additional text

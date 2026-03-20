@@ -1,0 +1,310 @@
+# Category: Metadata Add - Batch Analysis
+
+You are a Genie Space expert analyzing ALL benchmark failures together.
+Your task: Identify **synonyms and descriptions to ADD** that enable Korean term matching.
+
+═══════════════════════════════════════════════════════════════════════════════
+## WHAT IS GENIE SPACE?
+═══════════════════════════════════════════════════════════════════════════════
+
+Genie Space is Databricks' natural language to SQL system. Users ask questions in
+natural language (often Korean), and Genie generates SQL queries.
+
+**Core Principle: METADATA QUALITY = GENIE QUALITY**
+Genie understands data through metadata. Poor metadata → poor results.
+
+═══════════════════════════════════════════════════════════════════════════════
+## METADATA BEST PRACTICES (MOST CRITICAL!)
+═══════════════════════════════════════════════════════════════════════════════
+
+### Synonyms (CRITICAL for Natural Language!)
+
+Synonyms map user terms to column names. **Without synonyms, Genie can't match
+Korean questions to SQL columns.**
+
+**When to add synonyms:**
+- Question uses Korean term X but column is named Y (English)
+- Business jargon differs from technical names
+- Common variations users might say
+
+**Good synonym examples:**
+| Column Name | Korean Synonyms |
+|-------------|-----------------|
+| `reaction.count` | 리액션, 리액션 수, 반응 |
+| `votes_up` | 추천, 추천 수, 업보트, 좋아요 |
+| `message_id` | 메시지, 글 |
+| `channel_name` | 채널, 채널명 |
+| `comment_id` | 댓글, 코멘트 |
+
+**Synonym fix format:**
+```json
+{{
+  "type": "add_synonym",
+  "table": "catalog.schema.table_name",
+  "column": "column_name",
+  "synonym": "한글_용어",
+  "reasoning": "Question uses '한글_용어' but column is 'column_name'"
+}}
+```
+
+### Column Descriptions
+
+Every important column MUST have:
+- What the field represents
+- When to use this field
+- Business rules that apply
+
+**Good description template:**
+"[What it represents]. Use for [purpose]. [Units/format if applicable]."
+
+```
+GOOD: "Total order value in USD. Use for revenue calculations.
+       Does NOT include tax or shipping."
+
+BAD:  "Order amount"
+```
+
+**Column description fix format:**
+```json
+{{
+  "type": "add_column_description",
+  "table": "catalog.schema.table_name",
+  "column": "column_name",
+  "description": ["Korean description of what this column contains and when to use it"],
+  "reasoning": "Genie picked wrong column because purpose was unclear"
+}}
+```
+
+### Table Descriptions
+
+Every table MUST have a description that includes:
+- What the table represents
+- Scope of data (what's included AND excluded)
+- Conditions for when Genie should use this table
+
+```
+GOOD: "Contains all completed customer orders since 2020. Each row is one
+       order transaction. Does NOT include pending orders (use orders_pending).
+       Use for revenue analysis and purchase history."
+
+BAD:  "Orders table"
+```
+
+**Table description fix format:**
+```json
+{{
+  "type": "add_table_description",
+  "table": "catalog.schema.table_name",
+  "description": ["Korean description of table scope and usage"],
+  "reasoning": "Genie picked wrong table because scope was unclear"
+}}
+```
+
+### Common Issues Fixed by Metadata:
+| Issue | Fix With |
+|-------|----------|
+| Query uses wrong fields | Column descriptions + Synonyms |
+| "No data available" (but exists) | Table descriptions + Synonyms |
+| Answers about out-of-scope data | Table descriptions (scope clarity) |
+
+═══════════════════════════════════════════════════════════════════════════════
+## STEP 1: LEARN FROM ALL BENCHMARKS
+═══════════════════════════════════════════════════════════════════════════════
+
+Before analyzing failures, study ALL benchmarks to understand the domain:
+
+{all_benchmarks}
+
+### Pattern Discovery Tasks:
+
+1. **Table Usage Analysis:**
+   - Which tables appear most frequently in expected_sql?
+   - What are the table relationships (JOINs)?
+   - Which tables are primary vs auxiliary (metadata, lookup)?
+
+2. **Metric/Calculation Patterns:**
+   - What metrics are calculated? (e.g., SUM, AVG, COUNT, try_divide)
+   - Are there domain-specific calculations? (e.g., DAU, retention, conversion rates)
+   - What data types/casting patterns appear? (e.g., ::decimal(38,2))
+
+3. **Korean Vocabulary Mining:**
+   - Map Korean terms in questions → SQL columns/tables in expected_sql
+   - Count frequency across ALL benchmarks (not just failures)
+   - Identify domain terminology (e.g., "일별" → daily, "매출" → revenue)
+
+4. **Date/Time Patterns:**
+   - How are date ranges specified? (INTERVAL, DATE_TRUNC)
+   - What date columns are used? (event_date, created_at, etc.)
+   - Are there date filters that appear consistently?
+
+5. **Aggregation Patterns:**
+   - What GROUP BY patterns appear?
+   - Are there window functions? (ROW_NUMBER, RANK)
+   - What ordering/sorting patterns exist?
+
+**Output of Pattern Discovery:**
+Create a mental model of:
+- Domain vocabulary (Korean ↔ SQL mapping)
+- Common table structures and relationships
+- Typical query patterns for this domain
+
+═══════════════════════════════════════════════════════════════════════════════
+## ALL FAILURES TO ANALYZE ({failure_count} total)
+═══════════════════════════════════════════════════════════════════════════════
+
+{all_failures}
+
+═══════════════════════════════════════════════════════════════════════════════
+## CURRENT SPACE CONFIGURATION
+═══════════════════════════════════════════════════════════════════════════════
+
+{space_config}
+
+═══════════════════════════════════════════════════════════════════════════════
+## STEP 2: ANALYZE FAILURES WITH DOMAIN KNOWLEDGE
+═══════════════════════════════════════════════════════════════════════════════
+
+Now that you understand the domain patterns from ALL benchmarks, analyze failures:
+
+### 1. Synonym Mining (CRITICAL for Korean)
+
+Using your domain vocabulary map from STEP 1:
+- Which Korean terms appear in failed questions?
+- Do they map to columns in expected_sql?
+- Are these mappings already in space_config as synonyms?
+- Count frequency across ALL benchmarks (not just failures)
+
+**Example synonym mining:**
+| Korean Term | Column in Expected SQL | Frequency (All) | In Failures |
+|-------------|------------------------|-----------------|-------------|
+| 일별 | event_date (daily) | 15 benchmarks | 5 failures |
+| 매출 | cash_revenue | 12 benchmarks | 4 failures |
+| 유저 | active_user | 20 benchmarks | 8 failures |
+
+### 2. Column Descriptions (Based on Learned Patterns)
+
+For columns where Genie picks the WRONG column:
+- Use calculation patterns from STEP 1 to describe column purpose
+  Example: If "active_user" appears in SUM() for DAU calculations, describe it as:
+  "일별 활성 사용자 수. DAU 계산에 사용."
+- Reference how the column is used in expected_sql across benchmarks
+- Clarify difference from similar columns based on usage patterns
+
+### 3. Table Descriptions (Based on Domain Understanding)
+
+For tables where Genie picks the WRONG table:
+- Use table frequency analysis from STEP 1 to describe scope
+  Example: If "summary_daily" appears in 15/20 benchmarks for daily metrics:
+  "일별 집계 데이터. 일간 KPI 분석에 사용."
+- Describe table relationships discovered in JOIN patterns
+- Clarify what data is/isn't included based on WHERE clauses in expected_sql
+
+**Prioritization:**
+- Add synonyms that help the MOST failures first
+- Focus on high-frequency Korean terms
+
+═══════════════════════════════════════════════════════════════════════════════
+## OUTPUT FORMAT
+═══════════════════════════════════════════════════════════════════════════════
+
+Return JSON:
+
+```json
+{{
+  "analysis": {{
+    "domain_patterns_discovered": {{
+      "primary_tables": ["table1 (frequency: N)", "table2 (frequency: M)"],
+      "common_metrics": ["SUM(active_user) as DAU", "try_divide(revenue, users) as ARPU"],
+      "date_columns": ["event_date", "created_at"],
+      "common_filters": ["game_code = 'xxx'", "event_date >= CURRENT_DATE - INTERVAL N DAYS"]
+    }},
+    "korean_vocabulary_map": [
+      {{
+        "korean_term": "일별",
+        "sql_element": "event_date / daily aggregation",
+        "total_occurrences": 15,
+        "in_failures": 5
+      }},
+      {{
+        "korean_term": "매출",
+        "sql_element": "cash_revenue column",
+        "total_occurrences": 12,
+        "in_failures": 4
+      }}
+    ],
+    "korean_terms_mined": [
+      {{
+        "term": "일별",
+        "maps_to_table": "sandbox.agent_poc.summary_daily",
+        "maps_to_column": "event_date",
+        "failure_count": 5,
+        "total_benchmark_count": 15,
+        "example_questions": ["일별 매출", "일별 유저 수"]
+      }}
+    ],
+    "column_clarifications_needed": [
+      {{
+        "table": "table_name",
+        "column": "column_name",
+        "issue": "Genie confuses this with other column",
+        "failure_count": N
+      }}
+    ],
+    "table_clarifications_needed": [
+      {{
+        "table": "table_name",
+        "issue": "Genie uses wrong table",
+        "failure_count": N
+      }}
+    ],
+    "total_fixes": N,
+    "reasoning": "Overall analysis"
+  }},
+  "recommended_fixes": [
+    {{
+      "type": "add_synonym",
+      "table": "catalog.schema.table",
+      "column": "column_name",
+      "synonym": "한글_동의어",
+      "reasoning": "Term appears in N failures, maps to this column"
+    }},
+    {{
+      "type": "add_column_description",
+      "table": "catalog.schema.table",
+      "column": "column_name",
+      "description": ["Korean description of column purpose and usage"],
+      "reasoning": "Clarifies column purpose to prevent wrong selection"
+    }},
+    {{
+      "type": "add_table_description",
+      "table": "catalog.schema.table",
+      "description": ["Korean description of table scope"],
+      "reasoning": "Clarifies table scope to prevent wrong table selection"
+    }}
+  ]
+}}
+```
+
+If no additions needed:
+```json
+{{
+  "analysis": {{
+    "korean_terms_mined": [],
+    "column_clarifications_needed": [],
+    "table_clarifications_needed": [],
+    "total_fixes": 0,
+    "reasoning": "All Korean terms already mapped, descriptions complete"
+  }},
+  "recommended_fixes": []
+}}
+```
+
+═══════════════════════════════════════════════════════════════════════════════
+
+**IMPORTANT:**
+- Mine Korean terms systematically from ALL failures
+- Prioritize high-frequency terms
+- Use Korean for synonyms and descriptions
+- Add synonyms that help MULTIPLE failures, not just one
+
+Return ONLY valid JSON. No additional text.

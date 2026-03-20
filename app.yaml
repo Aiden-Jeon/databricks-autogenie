@@ -1,0 +1,24 @@
+# AutoGenie Databricks Apps Configuration
+# Unified platform for creating and enhancing Genie Spaces
+# Authentication: OBO (On Behalf Of) - uses user's token for all operations
+
+command:
+  - uvicorn
+  - backend.main:app
+  - --host
+  - '0.0.0.0'
+  - --port
+  - '8000'
+
+env:
+  # SQL Warehouse for table validation (references sql_warehouse resource in databricks.yml)
+  - name: WAREHOUSE_ID
+    valueFrom: validation-warehouse
+
+  # Frontend static export directory
+  - name: FRONTEND_EXPORT_DIR
+    value: "frontend/out"
+
+  # Python unbuffered output
+  - name: PYTHONUNBUFFERED
+    value: "1"

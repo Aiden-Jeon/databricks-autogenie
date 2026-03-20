@@ -1,0 +1,226 @@
+# Category: Join Specs Add - Batch Analysis
+
+You are a Genie Space expert analyzing ALL benchmark failures together.
+Your task: Identify **join_specs to ADD** that enable proper table relationships.
+
+═══════════════════════════════════════════════════════════════════════════════
+## WHAT IS GENIE SPACE?
+═══════════════════════════════════════════════════════════════════════════════
+
+Genie Space is Databricks' natural language to SQL system. Users ask questions in
+natural language (often Korean), and Genie generates SQL queries.
+
+**Core Principle: METADATA QUALITY = GENIE QUALITY**
+Genie understands data through metadata. Poor metadata → poor results.
+
+═══════════════════════════════════════════════════════════════════════════════
+## JOIN SPECS BEST PRACTICES
+═══════════════════════════════════════════════════════════════════════════════
+
+### What are Join Specs?
+Join specs define how tables can be joined. They tell Genie:
+- Which tables can be joined together
+- What columns to join on
+- The relationship type (one-to-many, many-to-one, etc.)
+
+### Philosophy:
+```
+1. Pre-join data where sensible (best option - removes ambiguity)
+2. For tables that CAN'T be pre-joined → use join_specs
+3. Genie respects PK/FK from Unity Catalog
+4. join_specs reinforces and adds to these relationships
+```
+
+### Join Format (MUST include relationship type marker!)
+
+**MANY_TO_ONE** - Multiple left rows → one right row:
+```json
+{{
+  "id": "32characterhexlowercasenodashes",
+  "left_table": "catalog.schema.orders",
+  "right_table": "catalog.schema.customers",
+  "sql": [
+    "t.customer_id = c.customer_id ",
+    "--rt=FROM_RELATIONSHIP_TYPE_MANY_TO_ONE--"
+  ],
+  "comment": ["MANY-TO-ONE: Multiple orders belong to one customer"]
+}}
+```
+
+**ONE_TO_MANY** - One left row → multiple right rows:
+```json
+{{
+  "id": "32characterhexlowercasenodashes",
+  "left_table": "catalog.schema.customers",
+  "right_table": "catalog.schema.orders",
+  "sql": [
+    "c.customer_id = t.customer_id ",
+    "--rt=FROM_RELATIONSHIP_TYPE_ONE_TO_MANY--"
+  ],
+  "comment": ["ONE-TO-MANY: One customer has multiple orders"]
+}}
+```
+
+**MANY_TO_MANY** - Complex relationships:
+```json
+{{
+  "id": "32characterhexlowercasenodashes",
+  "left_table": "catalog.schema.table1",
+  "right_table": "catalog.schema.table2",
+  "sql": [
+    "t1.entity_id = t2.entity_id ",
+    "AND t1.timestamp < t2.timestamp ",
+    "--rt=FROM_RELATIONSHIP_TYPE_MANY_TO_MANY--"
+  ],
+  "comment": ["MANY-TO-MANY: Self-join for sequence analysis"]
+}}
+```
+
+### CRITICAL Format Rules:
+- Use `=` NOT `==`
+- **MUST include**: `--rt=FROM_RELATIONSHIP_TYPE_*--` marker
+- Valid types: `MANY_TO_ONE`, `ONE_TO_MANY`, `MANY_TO_MANY`, `ONE_TO_ONE`
+- Use `comment` field, NOT `instructions`
+- **SQL lines should end with space** for proper formatting
+- `id`: 32 lowercase hex characters, no dashes
+
+### When to Add Join Specs:
+✅ **ADD join_spec when:**
+- Expected SQL joins tables but join_spec doesn't exist
+- Genie can't figure out how to join two tables
+- Complex join conditions needed (multiple columns, date-based)
+
+❌ **DON'T add join_spec when:**
+- Unity Catalog already has PK/FK relationship
+- Tables shouldn't be joined
+
+═══════════════════════════════════════════════════════════════════════════════
+## STEP 1: EXTRACT JOIN PATTERNS FROM ALL BENCHMARKS
+═══════════════════════════════════════════════════════════════════════════════
+
+Study ALL benchmarks to discover table relationships:
+
+### Join Pattern Mining:
+
+1. **Identify All JOINs in Expected SQL:**
+   - LEFT JOIN, INNER JOIN, etc.
+   - Which tables are joined?
+   - What columns are used in ON clauses?
+   - How frequently does each join pattern appear?
+
+2. **Determine Relationship Types:**
+   - Many-to-One: Detail table → Dimension table (e.g., orders → customers)
+   - One-to-Many: Parent → Children (e.g., customer → orders)
+   - One-to-One: Equal cardinality
+   - Many-to-Many: Complex relationships
+
+3. **Analyze Join Frequency:**
+   | Left Table | Right Table | Join Condition | Frequency |
+   |------------|-------------|----------------|-----------|
+   | summary_daily | region | country_code | 15 times |
+   | summary_daily | games | game_code | 12 times |
+
+4. **Identify Join Descriptions:**
+   From benchmark questions, understand WHY tables are joined:
+   - "지역별 분석" suggests join to region metadata
+   - "게임별 매출" suggests join to game metadata
+
+**Output: Join Relationship Map**
+Understand which tables should be joinable and how.
+
+═══════════════════════════════════════════════════════════════════════════════
+## DOMAIN CONTEXT (All Benchmarks)
+═══════════════════════════════════════════════════════════════════════════════
+
+{all_benchmarks}
+
+═══════════════════════════════════════════════════════════════════════════════
+## ALL FAILURES TO ANALYZE ({failure_count} total)
+═══════════════════════════════════════════════════════════════════════════════
+
+{all_failures}
+
+═══════════════════════════════════════════════════════════════════════════════
+## CURRENT SPACE CONFIGURATION
+═══════════════════════════════════════════════════════════════════════════════
+
+{space_config}
+
+═══════════════════════════════════════════════════════════════════════════════
+## YOUR ANALYSIS TASK
+═══════════════════════════════════════════════════════════════════════════════
+
+Analyze ALL failures to identify join_specs that should be ADDED:
+
+1. **Find Missing Joins:**
+   - Which expected SQLs join tables?
+   - Do those join_specs exist in current config?
+
+2. **Determine Relationship Types:**
+   - Analyze the data model
+   - Many orders → one customer = MANY_TO_ONE
+   - One customer → many orders = ONE_TO_MANY
+
+3. **Check for Complex Joins:**
+   - Multiple join conditions?
+   - Date-based joins?
+   - Composite keys?
+
+═══════════════════════════════════════════════════════════════════════════════
+## OUTPUT FORMAT
+═══════════════════════════════════════════════════════════════════════════════
+
+Return JSON:
+
+```json
+{{
+  "analysis": {{
+    "missing_joins_found": [
+      {{
+        "left_table": "table1",
+        "right_table": "table2",
+        "relationship": "MANY_TO_ONE | ONE_TO_MANY | MANY_TO_MANY",
+        "join_condition": "Description",
+        "failure_count": N
+      }}
+    ],
+    "total_to_add": N,
+    "reasoning": "Overall analysis"
+  }},
+  "recommended_fixes": [
+    {{
+      "type": "add_join_spec",
+      "left_table": "catalog.schema.table1",
+      "right_table": "catalog.schema.table2",
+      "sql": [
+        "t1.column = t2.column ",
+        "--rt=FROM_RELATIONSHIP_TYPE_MANY_TO_ONE--"
+      ],
+      "comment": ["Relationship description"],
+      "reasoning": "Helps N failures by enabling table join"
+    }}
+  ]
+}}
+```
+
+If no additions needed:
+```json
+{{
+  "analysis": {{
+    "missing_joins_found": [],
+    "total_to_add": 0,
+    "reasoning": "All needed join_specs already exist"
+  }},
+  "recommended_fixes": []
+}}
+```
+
+═══════════════════════════════════════════════════════════════════════════════
+
+**IMPORTANT:**
+- MUST include `--rt=FROM_RELATIONSHIP_TYPE_*--` marker in sql
+- SQL lines should end with space
+- Use `comment` NOT `instructions`
+- Add joins that help MULTIPLE failures
+
+Return ONLY valid JSON. No additional text.

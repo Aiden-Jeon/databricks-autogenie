@@ -1,0 +1,142 @@
+# Rule Extraction from Benchmarks
+
+You are extracting business rules and conventions from benchmark SQLs to create text_instructions.
+
+═══════════════════════════════════════════════════════════════════════════════
+## TASK
+═══════════════════════════════════════════════════════════════════════════════
+
+Analyze ALL benchmark SQLs and identify:
+1. Repeated WHERE clauses (default filters)
+2. Repeated date handling patterns
+3. Repeated deduplication logic
+4. Domain-specific conventions
+
+═══════════════════════════════════════════════════════════════════════════════
+## INPUT: ALL BENCHMARKS
+═══════════════════════════════════════════════════════════════════════════════
+
+{benchmarks}
+
+═══════════════════════════════════════════════════════════════════════════════
+## RULE CATEGORIES
+═══════════════════════════════════════════════════════════════════════════════
+
+### Category 1: Default Filters
+Repeated WHERE conditions that should always be applied:
+- `product_category = 'electronics'` (appears in N queries)
+- `status = 'active'` (appears in N queries)
+
+### Category 2: Date Conventions
+How date terms in questions map to SQL:
+- "최근 7일" → `>= CURRENT_DATE - INTERVAL 7 DAYS`
+- "최근 30일" → `>= CURRENT_DATE - INTERVAL 30 DAYS`
+- "지난 달" → Previous calendar month
+
+### Category 3: Deduplication Rules
+For snapshot tables that have multiple records per entity:
+- Use `ROW_NUMBER() OVER (PARTITION BY :id ORDER BY event_date DESC)`
+- Filter `WHERE rn = 1` for latest record
+
+### Category 4: Join Conventions
+Common table relationships:
+- `message` → `reaction` via `message_id`
+- `message` → `channel_list` via `channel_id`
+- `store_appreviews` → `steam_apps` via `app_id`
+
+### Category 5: Platform-Specific Rules
+- Discord data: Use `message`, `reaction`, `channel_list` tables
+- Steam data: Use `store_appreviews`, `community_discussions_*` tables
+- Cross-platform: UNION results from both
+
+### Category 6: Aggregation Defaults
+- "총" / "전체" → SUM()
+- "평균" → AVG()
+- "개수" → COUNT()
+- Round monetary/percentage values to 2 decimal places
+
+═══════════════════════════════════════════════════════════════════════════════
+## EXTRACTION PROCESS
+═══════════════════════════════════════════════════════════════════════════════
+
+1. **Scan all SQLs** for repeated patterns
+2. **Count frequency** of each pattern
+3. **Identify implicit rules** (not stated but consistently applied)
+4. **Prioritize by frequency** (more common = more important)
+
+═══════════════════════════════════════════════════════════════════════════════
+## OUTPUT FORMAT
+═══════════════════════════════════════════════════════════════════════════════
+
+Return JSON:
+
+```json
+{{
+  "extraction_summary": {{
+    "total_benchmarks_analyzed": 20,
+    "rules_identified": <number>,
+    "high_frequency_rules": <number>
+  }},
+  "rules": [
+    {{
+      "category": "default_filter",
+      "rule": "기본 필터: product_category = 'electronics' 적용",
+      "sql_pattern": "WHERE product_category = 'electronics'",
+      "frequency": 15,
+      "priority": "high"
+    }},
+    {{
+      "category": "date_convention",
+      "rule": "기본 조회 기간: 최근 30일 (event_date >= CURRENT_DATE - INTERVAL 30 DAYS)",
+      "sql_pattern": "event_date >= CURRENT_DATE - INTERVAL 30 DAYS",
+      "frequency": 12,
+      "priority": "high"
+    }},
+    {{
+      "category": "deduplication",
+      "rule": "스냅샷 테이블 조회 시 ROW_NUMBER()로 entity별 최신 데이터만 사용 (event_date DESC 기준)",
+      "sql_pattern": "ROW_NUMBER() OVER (PARTITION BY :id ORDER BY event_date DESC) as rn ... WHERE rn = 1",
+      "frequency": 10,
+      "priority": "high",
+      "applies_to": ["store_appreviews", "community_discussions_topics", "community_discussions_comments"]
+    }},
+    {{
+      "category": "aggregation",
+      "rule": "리액션 수 계산 시 COALESCE(SUM(count), 0) 사용 (NULL 처리)",
+      "sql_pattern": "COALESCE(SUM(r.count), 0)",
+      "frequency": 5,
+      "priority": "medium"
+    }}
+  ],
+  "text_instruction": {{
+    "content": [
+      "## 기본 규칙",
+      "- 기본 카테고리 필터: product_category = 'electronics' 적용",
+      "- 기본 조회 기간: 최근 30일 (별도 지정 없으면)",
+      "",
+      "## 날짜 해석",
+      "- '최근 7일' = event_date >= CURRENT_DATE - INTERVAL 7 DAYS",
+      "- '최근 30일' = event_date >= CURRENT_DATE - INTERVAL 30 DAYS",
+      "- '일주일' = 7일",
+      "",
+      "## 데이터 처리",
+      "- 스냅샷 테이블(store_appreviews, community_discussions_*)은 ROW_NUMBER()로 최신 데이터만 사용",
+      "- 리액션/추천 수 집계 시 COALESCE로 NULL을 0으로 처리",
+      "",
+      "## 플랫폼별 테이블",
+      "- Discord: message, reaction, channel_list",
+      "- Steam: store_appreviews, steam_apps, community_discussions_topics, community_discussions_comments"
+    ]
+  }}
+}}
+```
+
+═══════════════════════════════════════════════════════════════════════════════
+## IMPORTANT
+═══════════════════════════════════════════════════════════════════════════════
+
+- Focus on HIGH FREQUENCY rules (appear in 5+ benchmarks)
+- Include Korean descriptions for rules
+- The `text_instruction.content` should be a COMPLETE, CONSOLIDATED instruction block
+- Only ONE text_instruction block is allowed in Genie Space (this replaces any existing)
+- Return ONLY valid JSON, no additional text

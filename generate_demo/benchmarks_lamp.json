@@ -1,0 +1,42 @@
+[
+  {
+    "question": "월별 총 매출은 얼마인가요?",
+    "expected_sql": "SELECT DATE_TRUNC('month', order_date) AS month, SUM(total_amount) AS revenue FROM main.autogenie_demo.orders WHERE status = 'completed' GROUP BY DATE_TRUNC('month', order_date) ORDER BY month"
+  },
+  {
+    "question": "총 지출 기준 상위 10명의 고객은 누구인가요?",
+    "expected_sql": "SELECT c.name, c.segment, c.region, SUM(o.total_amount) AS total_spend FROM main.autogenie_demo.customers c JOIN main.autogenie_demo.orders o ON c.customer_id = o.customer_id WHERE o.status = 'completed' GROUP BY c.name, c.segment, c.region ORDER BY total_spend DESC LIMIT 10"
+  },
+  {
+    "question": "판매 수량 기준 베스트셀러 상품은 무엇인가요?",
+    "expected_sql": "SELECT p.product_name, p.category, SUM(oi.quantity) AS units_sold FROM main.autogenie_demo.order_items oi JOIN main.autogenie_demo.products p ON oi.product_id = p.product_id JOIN main.autogenie_demo.orders o ON oi.order_id = o.order_id WHERE o.status = 'completed' GROUP BY p.product_name, p.category ORDER BY units_sold DESC LIMIT 10"
+  },
+  {
+    "question": "상품 카테고리별 매출 내역은 어떻게 되나요?",
+    "expected_sql": "SELECT p.category, SUM(oi.subtotal) AS category_revenue FROM main.autogenie_demo.order_items oi JOIN main.autogenie_demo.products p ON oi.product_id = p.product_id JOIN main.autogenie_demo.orders o ON oi.order_id = o.order_id WHERE o.status = 'completed' GROUP BY p.category ORDER BY category_revenue DESC"
+  },
+  {
+    "question": "카테고리별 평균 상품 평점은 얼마인가요?",
+    "expected_sql": "SELECT p.category, ROUND(AVG(r.rating), 2) AS avg_rating, COUNT(*) AS review_count FROM main.autogenie_demo.reviews r JOIN main.autogenie_demo.products p ON r.product_id = p.product_id GROUP BY p.category ORDER BY avg_rating DESC"
+  },
+  {
+    "question": "고객 세그먼트별 매출은 얼마인가요?",
+    "expected_sql": "SELECT c.segment, COUNT(DISTINCT o.order_id) AS order_count, SUM(o.total_amount) AS revenue FROM main.autogenie_demo.customers c JOIN main.autogenie_demo.orders o ON c.customer_id = o.customer_id WHERE o.status = 'completed' GROUP BY c.segment ORDER BY revenue DESC"
+  },
+  {
+    "question": "상품별 매출총이익률은 얼마인가요?",
+    "expected_sql": "SELECT p.product_name, p.price, p.cost, ROUND((p.price - p.cost) / p.price * 100, 1) AS margin_pct, SUM(oi.quantity) AS units_sold FROM main.autogenie_demo.products p JOIN main.autogenie_demo.order_items oi ON p.product_id = oi.product_id JOIN main.autogenie_demo.orders o ON oi.order_id = o.order_id WHERE o.status = 'completed' GROUP BY p.product_name, p.price, p.cost ORDER BY margin_pct DESC"
+  },
+  {
+    "question": "주문 취소 및 반품률은 얼마인가요?",
+    "expected_sql": "SELECT status, COUNT(*) AS order_count, ROUND(COUNT(*) * 100.0 / SUM(COUNT(*)) OVER(), 1) AS pct FROM main.autogenie_demo.orders GROUP BY status ORDER BY order_count DESC"
+  },
+  {
+    "question": "어느 지역이 가장 많은 매출을 올리나요?",
+    "expected_sql": "SELECT c.region, SUM(o.total_amount) AS revenue, COUNT(DISTINCT o.order_id) AS orders FROM main.autogenie_demo.customers c JOIN main.autogenie_demo.orders o ON c.customer_id = o.customer_id WHERE o.status = 'completed' GROUP BY c.region ORDER BY revenue DESC"
+  },
+  {
+    "question": "가장 많이 사용되는 결제 수단은 무엇인가요?",
+    "expected_sql": "SELECT payment_method, COUNT(*) AS order_count, SUM(total_amount) AS total_revenue FROM main.autogenie_demo.orders WHERE status = 'completed' GROUP BY payment_method ORDER BY order_count DESC"
+  }
+]

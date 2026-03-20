@@ -1,0 +1,240 @@
+# Category: SQL Snippets Add - Batch Analysis
+
+You are a Genie Space expert analyzing ALL benchmark failures together.
+Your task: Identify **sql_snippets (filters, expressions, measures) to ADD** that enable reusable SQL building blocks.
+
+═══════════════════════════════════════════════════════════════════════════════
+## WHAT IS GENIE SPACE?
+═══════════════════════════════════════════════════════════════════════════════
+
+Genie Space is Databricks' natural language to SQL system. Users ask questions in
+natural language (often Korean), and Genie generates SQL queries.
+
+**Core Principle: METADATA QUALITY = GENIE QUALITY**
+Genie understands data through metadata. Poor metadata → poor results.
+
+═══════════════════════════════════════════════════════════════════════════════
+## SQL SNIPPETS BEST PRACTICES
+═══════════════════════════════════════════════════════════════════════════════
+
+### What are SQL Snippets?
+Named, reusable SQL pieces that map business terms to SQL.
+They enable Genie to translate business language into correct SQL fragments.
+
+### CRITICAL: Include Full Table Name!
+SQL snippets MUST include full table name (catalog.schema.table.column) for context.
+
+### Three Types of SQL Snippets:
+
+**1. Filters (WHERE conditions)**
+Named conditions users refer to by business term.
+```json
+{{
+  "id": "32characterhexlowercasenodashes",
+  "sql": ["catalog.schema.customers.status = 'approved' AND catalog.schema.customers.deleted_at IS NULL"],
+  "display_name": "Active customers",
+  "synonyms": ["활성", "현재", "active", "활성 고객"]
+}}
+```
+
+**2. Expressions/Dimensions (Row calculations)**
+Calculated columns that don't aggregate.
+```json
+{{
+  "id": "32characterhexlowercasenodashes",
+  "alias": "fiscal_year",
+  "sql": ["CASE WHEN MONTH(catalog.schema.orders.order_date) >= 7 THEN YEAR(catalog.schema.orders.order_date) + 1 ELSE YEAR(catalog.schema.orders.order_date) END"],
+  "display_name": "Fiscal year",
+  "synonyms": ["회계연도", "fiscal"]
+}}
+```
+
+**3. Measures (Aggregations)**
+Aggregate calculations.
+```json
+{{
+  "id": "32characterhexlowercasenodashes",
+  "alias": "total_revenue",
+  "sql": ["ROUND(SUM(catalog.schema.orders.amount), 2)"],
+  "display_name": "Total revenue",
+  "synonyms": ["총 매출", "매출", "revenue", "매출액"]
+}}
+```
+
+### Key Rules:
+- **SYNONYMS are critical** - they enable natural language matching
+- **Include full table name** (catalog.schema.table.column) in SQL
+- `id`: 32 lowercase hex characters, no dashes
+- NO `instructions` field (not supported by API)
+- NO `table_identifier` field
+
+### When to Add SQL Snippets:
+✅ **ADD snippet when:**
+- Common calculation appears in multiple expected SQLs
+- Business term needs to map to specific SQL logic
+- Filter condition has a business name ("active users", "recent data")
+
+❌ **DON'T add snippet when:**
+- Logic is simple enough for Genie to figure out
+- Similar snippet already exists
+
+### Common Issues Fixed by SQL Snippets:
+| Issue | Fix With |
+|-------|----------|
+| Wrong aggregation formula | Add measure with correct SQL |
+| Missing business filter | Add filter with business name |
+| Wrong calculation | Add expression with correct formula |
+
+═══════════════════════════════════════════════════════════════════════════════
+## STEP 1: EXTRACT REUSABLE SQL PATTERNS FROM ALL BENCHMARKS
+═══════════════════════════════════════════════════════════════════════════════
+
+Study ALL benchmarks to discover reusable SQL building blocks:
+
+{all_benchmarks}
+
+### SQL Pattern Mining:
+
+1. **Measure Patterns (Aggregations):**
+   - Which aggregations appear repeatedly?
+   - What Korean terms map to these measures?
+
+   Example analysis:
+   | Korean Term | SQL Pattern | Frequency |
+   |-------------|-------------|-----------|
+   | DAU | SUM(active_user) | 15 times |
+   | 매출 | SUM(cash_revenue)::decimal(38,2) | 12 times |
+   | ARPU | try_divide(SUM(revenue), SUM(users))::decimal(38,2) | 8 times |
+
+2. **Expression Patterns (Row Calculations):**
+   - CASE statements that appear multiple times
+   - Date transformations (DATE_TRUNC, date arithmetic)
+   - Type conversions (::decimal, CAST)
+
+3. **Filter Patterns (WHERE conditions):**
+   - Common filter conditions
+   - Business terms for filters ("active", "recent")
+
+   Example:
+   | Korean Term | SQL Pattern | Frequency |
+   |-------------|-------------|-----------|
+   | 최근 7일 | event_date >= CURRENT_DATE - INTERVAL 7 DAYS | 10 times |
+   | 월간 | end_date = last_day(end_date) | 8 times |
+
+4. **Synonym Extraction:**
+   For each pattern, identify Korean synonyms from questions:
+   - "매출", "수익", "revenue" all map to revenue calculation
+   - "유저", "사용자", "user" all map to user metrics
+
+**Output: Reusable SQL Library**
+Identify calculations that should become snippets.
+
+═══════════════════════════════════════════════════════════════════════════════
+## ALL FAILURES TO ANALYZE ({failure_count} total)
+═══════════════════════════════════════════════════════════════════════════════
+
+{all_failures}
+
+═══════════════════════════════════════════════════════════════════════════════
+## CURRENT SPACE CONFIGURATION
+═══════════════════════════════════════════════════════════════════════════════
+
+{space_config}
+
+═══════════════════════════════════════════════════════════════════════════════
+## YOUR ANALYSIS TASK
+═══════════════════════════════════════════════════════════════════════════════
+
+Analyze ALL failures to identify sql_snippets that should be ADDED:
+
+### 1. Common Calculations
+- What calculations appear in multiple expected SQLs?
+- Create reusable measures for these
+
+### 2. Business Term Mappings
+- Korean business terms → SQL expressions
+- Add synonyms for natural language matching
+
+### 3. Filter Patterns
+- Common WHERE conditions with business names
+- "활성 사용자", "최근 데이터" → filters
+
+**CRITICAL:** Include FULL table name (catalog.schema.table.column) in SQL.
+
+═══════════════════════════════════════════════════════════════════════════════
+## OUTPUT FORMAT
+═══════════════════════════════════════════════════════════════════════════════
+
+Return JSON:
+
+```json
+{{
+  "analysis": {{
+    "common_calculations_found": [
+      {{
+        "calculation": "Description",
+        "sql_pattern": "SQL snippet",
+        "failure_count": N,
+        "snippet_type": "filter | expression | measure"
+      }}
+    ],
+    "business_terms_needing_snippets": [
+      {{
+        "korean_term": "한글 용어",
+        "sql_implementation": "SQL",
+        "snippet_type": "filter | expression | measure"
+      }}
+    ],
+    "total_to_add": N,
+    "reasoning": "Overall analysis"
+  }},
+  "recommended_fixes": [
+    {{
+      "type": "add_filter",
+      "sql": ["catalog.schema.table.column = 'value'"],
+      "display_name": "Filter name",
+      "synonyms": ["동의어1", "동의어2"],
+      "reasoning": "Helps N failures by providing reusable filter"
+    }},
+    {{
+      "type": "add_expression",
+      "alias": "expression_alias",
+      "sql": ["CASE WHEN ... END"],
+      "display_name": "Expression name",
+      "synonyms": ["동의어1"],
+      "reasoning": "Helps N failures by providing reusable calculation"
+    }},
+    {{
+      "type": "add_measure",
+      "alias": "measure_alias",
+      "sql": ["SUM(catalog.schema.table.column)"],
+      "display_name": "Measure name",
+      "synonyms": ["동의어1", "동의어2"],
+      "reasoning": "Helps N failures by providing reusable aggregation"
+    }}
+  ]
+}}
+```
+
+If no additions needed:
+```json
+{{
+  "analysis": {{
+    "common_calculations_found": [],
+    "business_terms_needing_snippets": [],
+    "total_to_add": 0,
+    "reasoning": "All needed sql_snippets already exist"
+  }},
+  "recommended_fixes": []
+}}
+```
+
+═══════════════════════════════════════════════════════════════════════════════
+
+**IMPORTANT:**
+- Include FULL table name (catalog.schema.table.column) in SQL
+- Add synonyms for Korean term matching
+- Prioritize snippets that help MULTIPLE failures
+- Use Korean for display_name and synonyms
+
+Return ONLY valid JSON. No additional text.

@@ -1,0 +1,157 @@
+# Category: Join Specs Delete - Batch Analysis
+
+You are a Genie Space expert analyzing ALL benchmark failures together.
+Your task: Identify **join_specs to DELETE** that cause wrong table relationships.
+
+═══════════════════════════════════════════════════════════════════════════════
+## WHAT IS GENIE SPACE?
+═══════════════════════════════════════════════════════════════════════════════
+
+Genie Space is Databricks' natural language to SQL system. Users ask questions in
+natural language (often Korean), and Genie generates SQL queries.
+
+**Core Principle: METADATA QUALITY = GENIE QUALITY**
+Genie understands data through metadata. Poor metadata → poor results.
+
+═══════════════════════════════════════════════════════════════════════════════
+## JOIN SPECS PROBLEMS TO LOOK FOR
+═══════════════════════════════════════════════════════════════════════════════
+
+### What are Join Specs?
+Join specs define how tables can be joined:
+- Which tables can be joined
+- Join columns
+- Relationship type (MANY_TO_ONE, ONE_TO_MANY, etc.)
+
+### Join Spec Format:
+```json
+{{
+  "id": "32characterhexlowercasenodashes",
+  "left_table": "catalog.schema.table1",
+  "right_table": "catalog.schema.table2",
+  "sql": [
+    "t1.column = t2.column ",
+    "--rt=FROM_RELATIONSHIP_TYPE_MANY_TO_ONE--"
+  ],
+  "comment": ["Relationship description"]
+}}
+```
+
+### When Join Specs Cause Problems:
+
+**1. Wrong Relationship Type:**
+- Join marked as ONE_TO_ONE but actually MANY_TO_ONE
+- Causes duplicate rows or missing data
+- Example: Order-Customer marked as ONE_TO_ONE, but one customer has many orders
+
+**2. Wrong Join Columns:**
+- Join condition uses wrong columns
+- Produces incorrect results (wrong rows joined)
+- Example: Joining on `id` instead of `customer_id`
+
+**3. Conflicting Joins:**
+- Multiple join paths between same tables
+- Genie picks wrong path
+- Example: Two different ways to join Order and Customer
+
+**4. Cartesian Product Risk:**
+- Join missing conditions
+- Causes explosion of rows
+- Example: Missing AND condition in complex join
+
+### How to Identify Bad Joins:
+1. Compare expected SQL joins vs Genie's joins in failures
+2. Check if Genie joined tables wrongly
+3. Look for duplicate rows or wrong data in results
+
+═══════════════════════════════════════════════════════════════════════════════
+## DOMAIN CONTEXT (All Benchmarks)
+═══════════════════════════════════════════════════════════════════════════════
+
+{all_benchmarks}
+
+═══════════════════════════════════════════════════════════════════════════════
+## ALL FAILURES TO ANALYZE ({failure_count} total)
+═══════════════════════════════════════════════════════════════════════════════
+
+{all_failures}
+
+═══════════════════════════════════════════════════════════════════════════════
+## CURRENT SPACE CONFIGURATION
+═══════════════════════════════════════════════════════════════════════════════
+
+{space_config}
+
+═══════════════════════════════════════════════════════════════════════════════
+## YOUR ANALYSIS TASK
+═══════════════════════════════════════════════════════════════════════════════
+
+Analyze ALL failures and the current join_specs to identify joins that should be DELETED:
+
+1. **Check Relationship Types:**
+   - Is the relationship type correct?
+   - MANY_TO_ONE vs ONE_TO_MANY vs MANY_TO_MANY
+
+2. **Check Join Conditions:**
+   - Are the right columns being joined?
+   - Any missing conditions?
+
+3. **Check for Conflicts:**
+   - Multiple join paths between same tables?
+   - Genie picking wrong path?
+
+**Be conservative:** Only recommend deletion when there's clear evidence the join causes failures.
+
+═══════════════════════════════════════════════════════════════════════════════
+## OUTPUT FORMAT
+═══════════════════════════════════════════════════════════════════════════════
+
+Return JSON:
+
+```json
+{{
+  "analysis": {{
+    "problematic_joins_found": [
+      {{
+        "join_id": "id_if_known",
+        "left_table": "table1",
+        "right_table": "table2",
+        "problem": "Description of why it's problematic",
+        "affected_failures": ["failure_id1", "failure_id2"]
+      }}
+    ],
+    "total_to_delete": N,
+    "reasoning": "Overall analysis"
+  }},
+  "recommended_fixes": [
+    {{
+      "type": "delete_join_spec",
+      "id": "join_spec_id",
+      "left_table": "catalog.schema.table1",
+      "right_table": "catalog.schema.table2",
+      "reasoning": "Why this should be deleted"
+    }}
+  ]
+}}
+```
+
+If no deletions needed:
+```json
+{{
+  "analysis": {{
+    "problematic_joins_found": [],
+    "total_to_delete": 0,
+    "reasoning": "All existing join_specs are valid"
+  }},
+  "recommended_fixes": []
+}}
+```
+
+═══════════════════════════════════════════════════════════════════════════════
+
+**IMPORTANT:**
+- Be conservative - only delete if clearly causing failures
+- Check if Genie is using the join incorrectly
+- Consider if modification (via add) is better than deletion
+
+Return ONLY valid JSON. No additional text.

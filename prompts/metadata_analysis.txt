@@ -1,0 +1,173 @@
+# Metadata Analysis - Context-Informed Fix Generation
+
+You are a Genie Space expert analyzing a benchmark failure. Generate **METADATA fixes** (synonyms, descriptions) informed by the FULL domain context.
+
+═══════════════════════════════════════════════════════════════════════════════
+## DOMAIN CONTEXT (All Benchmarks)
+═══════════════════════════════════════════════════════════════════════════════
+
+These are ALL the questions users will ask (korean_question) and their expected SQL.
+Use this to understand:
+- What Korean terms users use → potential synonyms
+- What tables/columns are important → need good descriptions
+- Common patterns across questions → domain vocabulary
+
+{all_benchmarks}
+
+═══════════════════════════════════════════════════════════════════════════════
+## BEST PRACTICES REFERENCE
+═══════════════════════════════════════════════════════════════════════════════
+
+### Synonyms (CRITICAL for Korean term matching)
+
+Synonyms map user terms to column names. Without synonyms, Genie can't match Korean questions to SQL columns.
+
+**When to add synonyms:**
+- Question uses Korean term X but column is named Y (English)
+- Business jargon differs from technical names
+- Common variations users might say
+
+**Good synonym examples:**
+| Column Name | Korean Synonyms |
+|-------------|-----------------|
+| `reaction.count` | 리액션, 리액션 수, 반응 |
+| `votes_up` | 추천, 추천 수, 업보트, 좋아요 |
+| `message_id` | 메시지, 글 |
+| `channel_name` | 채널, 채널명 |
+| `comment_id` | 댓글, 코멘트 |
+
+**Synonym fix format:**
+```json
+{{
+  "type": "add_synonym",
+  "table": "catalog.schema.table_name",
+  "column": "column_name",
+  "synonym": "한글_용어",
+  "reasoning": "Question uses '한글_용어' but column is 'column_name'"
+}}
+```
+
+### Column Descriptions
+
+Descriptions clarify column purpose when names are ambiguous.
+
+**Good description template:**
+"[What it represents]. Use for [purpose]. [Units/format if applicable]."
+
+**Column description fix format:**
+```json
+{{
+  "type": "add_column_description",
+  "table": "catalog.schema.table_name",
+  "column": "column_name",
+  "description": ["Korean description of what this column contains and when to use it"],
+  "reasoning": "Genie picked wrong column because purpose was unclear"
+}}
+```
+
+### Table Descriptions
+
+Descriptions clarify table scope and when to use each table.
+
+**Good description template:**
+"[What data it contains]. Use for [use cases]. Does NOT include [exclusions]."
+
+**Table description fix format:**
+```json
+{{
+  "type": "add_table_description",
+  "table": "catalog.schema.table_name",
+  "description": ["Korean description of table scope and usage"],
+  "reasoning": "Genie picked wrong table because scope was unclear"
+}}
+```
+
+═══════════════════════════════════════════════════════════════════════════════
+## FAILED BENCHMARK TO FIX
+═══════════════════════════════════════════════════════════════════════════════
+
+**Korean Question (what user asked):**
+{question}
+
+**Expected SQL (correct answer):**
+{expected_sql}
+
+**Genie's Generated SQL (what Genie produced):**
+{genie_sql}
+
+**Current Space Configuration:**
+{space_config}
+
+═══════════════════════════════════════════════════════════════════════════════
+## YOUR ANALYSIS
+═══════════════════════════════════════════════════════════════════════════════
+
+Think through:
+
+1. **Korean Term Matching:**
+   - What Korean terms appear in the question?
+   - Do they map to columns in the space config?
+   - Are synonyms needed?
+
+2. **Cross-Benchmark Patterns:**
+   - Do similar Korean terms appear in other benchmarks?
+   - What columns do they consistently map to?
+   - Add synonyms that work across ALL benchmarks, not just this one.
+
+3. **Column/Table Selection:**
+   - Did Genie pick the wrong column or table?
+   - Would better descriptions help?
+
+═══════════════════════════════════════════════════════════════════════════════
+## OUTPUT FORMAT
+═══════════════════════════════════════════════════════════════════════════════
+
+Return JSON:
+
+```json
+{{
+  "analysis": {{
+    "korean_terms_in_question": ["리액션", "메시지", ...],
+    "term_mapping_issues": ["'리액션' not mapped to reaction.count"],
+    "cross_benchmark_patterns": ["'리액션' appears in 5 other benchmarks"],
+    "wrong_column_selected": true | false,
+    "wrong_table_selected": true | false,
+    "reasoning": "Explanation"
+  }},
+  "needs_metadata": true | false,
+  "recommended_fixes": [
+    {{
+      "type": "add_synonym",
+      "table": "sandbox.agent_poc.reaction",
+      "column": "count",
+      "synonym": "리액션",
+      "reasoning": "Question uses '리액션' which maps to reaction.count across 5 benchmarks"
+    }}
+  ]
+}}
+```
+
+If NO metadata fix is needed:
+```json
+{{
+  "analysis": {{
+    "korean_terms_in_question": [...],
+    "term_mapping_issues": [],
+    "cross_benchmark_patterns": [],
+    "wrong_column_selected": false,
+    "wrong_table_selected": false,
+    "reasoning": "All terms properly mapped. Issue is elsewhere."
+  }},
+  "needs_metadata": false,
+  "recommended_fixes": []
+}}
+```
+
+═══════════════════════════════════════════════════════════════════════════════
+
+**IMPORTANT:**
+- Generate fixes that work across ALL benchmarks, not just this failure
+- Use Korean for synonyms and descriptions
+- Be thorough - missing synonyms cause repeated failures
+
+Return ONLY valid JSON. No additional text.

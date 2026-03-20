@@ -1,0 +1,147 @@
+# Category: Metadata Delete - Batch Analysis
+
+You are a Genie Space expert analyzing ALL benchmark failures together.
+Your task: Identify **synonyms to DELETE** that may be causing wrong column/table selection.
+
+═══════════════════════════════════════════════════════════════════════════════
+## WHAT IS GENIE SPACE?
+═══════════════════════════════════════════════════════════════════════════════
+
+Genie Space is Databricks' natural language to SQL system. Users ask questions in
+natural language (often Korean), and Genie generates SQL queries.
+
+**Core Principle: METADATA QUALITY = GENIE QUALITY**
+Genie understands data through metadata. Poor metadata → poor results.
+
+═══════════════════════════════════════════════════════════════════════════════
+## SYNONYM PROBLEMS TO LOOK FOR
+═══════════════════════════════════════════════════════════════════════════════
+
+### What are Synonyms?
+Synonyms map user terms to column names. They enable Genie to match natural
+language to SQL columns.
+
+```json
+{{
+  "column_name": "order_amount",
+  "synonyms": ["revenue", "sales", "total", "amount", "order value"]
+}}
+```
+
+### When Synonyms Cause Problems:
+
+**1. Misleading Synonyms:**
+- Synonym X on column A, but users actually mean column B when they say X
+- Example: "매출" mapped to `gross_amount` but users mean `net_revenue`
+
+**2. Ambiguous Synonyms:**
+- Same synonym on multiple columns causing confusion
+- Too generic synonyms (e.g., "데이터" could match anything)
+
+**3. Wrong Mappings:**
+- Synonym doesn't actually match the column's purpose
+- Historical mistakes that need cleanup
+
+### How to Identify Bad Synonyms:
+1. Compare expected SQL vs Genie SQL in failures
+2. If Genie selected WRONG column, check if a misleading synonym caused it
+3. Look for patterns: same wrong column selected across multiple failures
+
+### Common Issues Fixed by Deleting Synonyms:
+| Issue | What to Delete |
+|-------|----------------|
+| Wrong column selected | Misleading synonym on that column |
+| Ambiguous results | Generic synonym that matches too many things |
+| Inconsistent behavior | Duplicate synonyms across columns |
+
+═══════════════════════════════════════════════════════════════════════════════
+## DOMAIN CONTEXT (All Benchmarks)
+═══════════════════════════════════════════════════════════════════════════════
+
+{all_benchmarks}
+
+═══════════════════════════════════════════════════════════════════════════════
+## ALL FAILURES TO ANALYZE ({failure_count} total)
+═══════════════════════════════════════════════════════════════════════════════
+
+{all_failures}
+
+═══════════════════════════════════════════════════════════════════════════════
+## CURRENT SPACE CONFIGURATION
+═══════════════════════════════════════════════════════════════════════════════
+
+{space_config}
+
+═══════════════════════════════════════════════════════════════════════════════
+## YOUR ANALYSIS TASK
+═══════════════════════════════════════════════════════════════════════════════
+
+Analyze ALL failures and the current synonyms to identify synonyms that should be DELETED:
+
+1. **Find Column Mismatches:**
+   - Expected SQL uses column X, but Genie used column Y
+   - Check if a synonym on column Y caused the wrong selection
+
+2. **Check for Ambiguity:**
+   - Is the same term a synonym on multiple columns?
+   - Is the synonym too generic?
+
+3. **Verify Mappings:**
+   - Does the synonym actually make sense for that column?
+
+**Be conservative:** Only recommend deletion when there's clear evidence the synonym causes failures.
+
+═══════════════════════════════════════════════════════════════════════════════
+## OUTPUT FORMAT
+═══════════════════════════════════════════════════════════════════════════════
+
+Return JSON:
+
+```json
+{{
+  "analysis": {{
+    "problematic_synonyms_found": [
+      {{
+        "table": "catalog.schema.table",
+        "column": "column_name",
+        "synonym": "문제되는_동의어",
+        "problem": "Description of why it's problematic",
+        "affected_failures": ["failure_id1", "failure_id2"],
+        "correct_mapping": "Should map to column X instead"
+      }}
+    ],
+    "total_to_delete": N,
+    "reasoning": "Overall analysis"
+  }},
+  "recommended_fixes": [
+    {{
+      "type": "delete_synonym",
+      "table": "catalog.schema.table",
+      "column": "column_name",
+      "synonym": "동의어_to_delete",
+      "reasoning": "Why this should be deleted"
+    }}
+  ]
+}}
+```
+
+If no deletions needed:
+```json
+{{
+  "analysis": {{
+    "problematic_synonyms_found": [],
+    "total_to_delete": 0,
+    "reasoning": "All existing synonyms are correctly mapped"
+  }},
+  "recommended_fixes": []
+}}
+```
+
+═══════════════════════════════════════════════════════════════════════════════
+
+**IMPORTANT:**
+- Be conservative - only delete if clearly causing failures
+- Look for synonyms that cause WRONG column selection
+- Consider if the synonym should be MOVED to another column instead (delete + add)
+
+Return ONLY valid JSON. No additional text.

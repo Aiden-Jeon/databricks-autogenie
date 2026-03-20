@@ -1,0 +1,142 @@
+# Category: Sample Queries Delete - Batch Analysis
+
+You are a Genie Space expert analyzing ALL benchmark failures together.
+Your task: Identify **example_question_sqls to DELETE** that may be causing confusion or wrong patterns.
+
+═══════════════════════════════════════════════════════════════════════════════
+## WHAT IS GENIE SPACE?
+═══════════════════════════════════════════════════════════════════════════════
+
+Genie Space is Databricks' natural language to SQL system. Users ask questions in
+natural language (often Korean), and Genie generates SQL queries.
+
+**Core Principle: METADATA QUALITY = GENIE QUALITY**
+Genie understands data through metadata. Poor metadata → poor results.
+
+═══════════════════════════════════════════════════════════════════════════════
+## EXAMPLE QUESTION SQLs PROBLEMS TO LOOK FOR
+═══════════════════════════════════════════════════════════════════════════════
+
+### What are Example Question SQLs?
+They teach Genie query **PATTERNS** and structure. If they teach wrong patterns,
+Genie will generate wrong SQL.
+
+### When to Delete Sample Queries:
+
+**1. Misleading Patterns:**
+- Example teaches a pattern that produces wrong results
+- SQL structure conflicts with what benchmarks expect
+
+**2. Duplicate/Redundant:**
+- Multiple examples teaching the same pattern
+- Overly specific queries that should be parameterized
+
+**3. Outdated/Wrong SQL:**
+- Queries with syntax errors
+- Queries using wrong tables/columns
+- Queries that don't follow Spark SQL syntax
+
+**4. Causing Confusion:**
+- Examples that Genie follows but produce wrong results
+- Pattern mismatches between example and benchmarks
+
+### How to Identify Bad Sample Queries:
+1. Compare Genie's SQL to expected SQL in failures
+2. Check if Genie's SQL matches an example_question_sql pattern
+3. If that pattern is wrong, the example should be deleted
+
+### Common Issues:
+| Issue | Action |
+|-------|--------|
+| Example SQL doesn't match expected pattern | Delete or replace |
+| Multiple similar examples causing confusion | Keep best, delete rest |
+| Example uses wrong table/column | Delete |
+
+═══════════════════════════════════════════════════════════════════════════════
+## DOMAIN CONTEXT (All Benchmarks)
+═══════════════════════════════════════════════════════════════════════════════
+
+{all_benchmarks}
+
+═══════════════════════════════════════════════════════════════════════════════
+## ALL FAILURES TO ANALYZE ({failure_count} total)
+═══════════════════════════════════════════════════════════════════════════════
+
+{all_failures}
+
+═══════════════════════════════════════════════════════════════════════════════
+## CURRENT SPACE CONFIGURATION
+═══════════════════════════════════════════════════════════════════════════════
+
+{space_config}
+
+═══════════════════════════════════════════════════════════════════════════════
+## YOUR ANALYSIS TASK
+═══════════════════════════════════════════════════════════════════════════════
+
+Analyze ALL failures and the current example_question_sqls to identify queries that should be DELETED:
+
+1. **Check for Pattern Conflicts:**
+   - Does any example teach a pattern that conflicts with expected SQL?
+   - Is Genie following an example that produces wrong results?
+
+2. **Check for Duplicates:**
+   - Are there multiple examples for the same pattern?
+   - Are there overly specific examples that should be generalized?
+
+3. **Check SQL Quality:**
+   - Any syntax errors in example SQL?
+   - Any wrong table/column references?
+
+**Be conservative:** Only recommend deletion when there's clear evidence the query is harmful.
+
+═══════════════════════════════════════════════════════════════════════════════
+## OUTPUT FORMAT
+═══════════════════════════════════════════════════════════════════════════════
+
+Return JSON:
+
+```json
+{{
+  "analysis": {{
+    "problematic_queries_found": [
+      {{
+        "query_id_or_pattern": "pattern_name or id",
+        "problem": "Description of why it's problematic",
+        "affected_failures": ["failure_id1", "failure_id2"]
+      }}
+    ],
+    "total_to_delete": N,
+    "reasoning": "Overall analysis"
+  }},
+  "recommended_fixes": [
+    {{
+      "type": "delete_example_query",
+      "pattern_name": "pattern_to_delete",
+      "id": "uuid_if_known",
+      "reasoning": "Why this should be deleted"
+    }}
+  ]
+}}
+```
+
+If no deletions needed:
+```json
+{{
+  "analysis": {{
+    "problematic_queries_found": [],
+    "total_to_delete": 0,
+    "reasoning": "All existing example queries are valid and helpful"
+  }},
+  "recommended_fixes": []
+}}
+```
+
+═══════════════════════════════════════════════════════════════════════════════
+
+**IMPORTANT:**
+- Be conservative - only delete if clearly problematic
+- Look for patterns that CAUSE failures, not just irrelevant ones
+- Consider if modification (via add) is better than deletion
+
+Return ONLY valid JSON. No additional text.

@@ -1,0 +1,259 @@
+# Category: Sample Queries Add - Batch Analysis
+
+You are a Genie Space expert analyzing ALL benchmark failures together.
+Your task: Identify **example_question_sqls to ADD** that teach missing query patterns.
+
+═══════════════════════════════════════════════════════════════════════════════
+## WHAT IS GENIE SPACE?
+═══════════════════════════════════════════════════════════════════════════════
+
+Genie Space is Databricks' natural language to SQL system. Users ask questions in
+natural language (often Korean), and Genie generates SQL queries.
+
+**Core Principle: METADATA QUALITY = GENIE QUALITY**
+Genie understands data through metadata. Poor metadata → poor results.
+
+═══════════════════════════════════════════════════════════════════════════════
+## EXAMPLE QUESTION SQLs BEST PRACTICES
+═══════════════════════════════════════════════════════════════════════════════
+
+### What are Example Question SQLs?
+They teach Genie query **PATTERNS** and structure - NOT raw Q&A storage.
+Think of them as parameterized templates that help multiple similar questions.
+
+### Purpose:
+- Teach SQL patterns Genie doesn't know
+- Show how to structure complex queries (CTEs, window functions)
+- Demonstrate date handling, ranking, comparisons
+
+### When to Add Sample Queries:
+✅ **ADD sample query when:**
+- Query pattern not in existing examples
+- Complex SQL structure needed (CTEs, ROW_NUMBER, subqueries)
+- Specific date handling ("최근 7일", "지난 달")
+- Ranking patterns ("상위 N개", "가장 많은")
+- Comparison patterns ("비교", "추이")
+
+❌ **DON'T add sample query when:**
+- Problem is term matching → use synonym instead
+- Problem is business rules → use instruction instead
+- Similar pattern already exists
+
+### API Format Requirements:
+```json
+{{
+  "id": "32characterhexlowercasenodashes",
+  "question": ["Korean question template with [placeholders]"],
+  "sql": [
+    "SELECT :param1 ",
+    "FROM :table ",
+    "WHERE :condition "
+  ],
+  "parameters": [
+    {{"name": "param1", "type_hint": "STRING", "description": ["설명"]}}
+  ],
+  "usage_guidance": ["When to use this pattern in Korean"]
+}}
+```
+
+**Format Rules:**
+- `id`: 32 lowercase hex characters, no dashes
+- `sql`: Array of strings, each line ends with space
+- Use Spark SQL syntax (DATE 'YYYY-MM-DD', single quotes for strings)
+
+### Pattern Templates Reference:
+
+**Pattern 1: Top N by Metric**
+```json
+{{
+  "pattern_name": "top_n_by_metric",
+  "question": ["[지표] 기준 상위 N개"],
+  "sql": [
+    "SELECT :group_col, SUM(:metric_col) as total ",
+    "FROM :table ",
+    "WHERE :date_col >= CURRENT_DATE - INTERVAL :days DAYS ",
+    "GROUP BY :group_col ",
+    "ORDER BY total DESC ",
+    "LIMIT :n "
+  ]
+}}
+```
+
+**Pattern 2: Latest Record (Snapshot Dedup)**
+```json
+{{
+  "pattern_name": "latest_record_dedup",
+  "question": ["스냅샷 테이블에서 최신 데이터 조회"],
+  "sql": [
+    "WITH latest AS ( ",
+    "  SELECT *, ROW_NUMBER() OVER (PARTITION BY :entity_id ORDER BY event_date DESC) as rn ",
+    "  FROM :table ",
+    ") ",
+    "SELECT * FROM latest WHERE rn = 1 "
+  ]
+}}
+```
+
+**Pattern 3: Daily Trend**
+```json
+{{
+  "pattern_name": "daily_trend",
+  "question": ["일별 [지표] 추이"],
+  "sql": [
+    "SELECT DATE(:date_col) as date, SUM(:metric) as total ",
+    "FROM :table ",
+    "WHERE :date_col >= CURRENT_DATE - INTERVAL :days DAYS ",
+    "GROUP BY DATE(:date_col) ",
+    "ORDER BY date "
+  ]
+}}
+```
+
+### Spark SQL Syntax Rules:
+```sql
+-- ✅ CORRECT
+WHERE event_date >= DATE '2025-08-18'
+WHERE status = 'active'
+
+-- ❌ WRONG
+WHERE event_date >= DATE 2025-08-18  -- Missing quotes!
+WHERE status = "active"              -- Double quotes are for identifiers
+```
+
+═══════════════════════════════════════════════════════════════════════════════
+## STEP 1: EXTRACT QUERY PATTERNS FROM ALL BENCHMARKS
+═══════════════════════════════════════════════════════════════════════════════
+
+Study ALL benchmarks to discover reusable query patterns:
+
+{all_benchmarks}
+
+### Pattern Extraction Tasks:
+
+1. **Identify Query Structure Families:**
+   - Simple aggregations (GROUP BY + SUM/COUNT)
+   - Window functions (ROW_NUMBER, RANK, LAG)
+   - CTEs (WITH clauses)
+   - Subqueries
+   - Self-joins or multi-table joins
+
+2. **Parameterize Common Patterns:**
+   For each structure family, identify what varies:
+   - Table names
+   - Column names
+   - Date ranges (INTERVAL values)
+   - Filtering conditions
+   - Aggregation functions
+
+3. **Calculate Pattern Frequency:**
+   - Which patterns appear most often?
+   - Which patterns help multiple failed questions?
+
+4. **Extract Template Structure:**
+   Convert specific queries into templates:
+   ```
+   SPECIFIC: SELECT SUM(active_user) FROM summary_daily WHERE event_date >= CURRENT_DATE - INTERVAL 7 DAYS
+   TEMPLATE: SELECT SUM(:metric_col) FROM :table WHERE :date_col >= CURRENT_DATE - INTERVAL :days DAYS
+   ```
+
+**Output: Pattern Template Library**
+Create reusable query templates that can help multiple questions.
+
+═══════════════════════════════════════════════════════════════════════════════
+## ALL FAILURES TO ANALYZE ({failure_count} total)
+═══════════════════════════════════════════════════════════════════════════════
+
+{all_failures}
+
+═══════════════════════════════════════════════════════════════════════════════
+## CURRENT SPACE CONFIGURATION
+═══════════════════════════════════════════════════════════════════════════════
+
+{space_config}
+
+═══════════════════════════════════════════════════════════════════════════════
+## YOUR ANALYSIS TASK
+═══════════════════════════════════════════════════════════════════════════════
+
+Analyze ALL failures to identify query PATTERNS that are missing:
+
+1. **Group Failures by Pattern:**
+   - Top N queries (가장 많은, 상위)
+   - Date range queries (최근 N일)
+   - Trend/time series (추이, 일별)
+   - Comparison queries (비교, vs)
+   - Deduplication (latest record from snapshot)
+   - Aggregation with filtering
+
+2. **For Each Missing Pattern:**
+   - Count how many failures it would help
+   - Create a PARAMETERIZED template (not specific query)
+   - Use placeholders like :param_name
+
+3. **Avoid Duplicates:**
+   - Check existing example_question_sqls first
+   - Don't add patterns that already exist
+
+**CRITICAL:** Create TEMPLATES, not specific answers. Templates help multiple queries.
+
+═══════════════════════════════════════════════════════════════════════════════
+## OUTPUT FORMAT
+═══════════════════════════════════════════════════════════════════════════════
+
+Return JSON:
+
+```json
+{{
+  "analysis": {{
+    "missing_patterns_found": [
+      {{
+        "pattern": "Description",
+        "failure_count": N,
+        "example_failures": ["id1", "id2"]
+      }}
+    ],
+    "total_patterns_to_add": N,
+    "reasoning": "Overall analysis"
+  }},
+  "recommended_fixes": [
+    {{
+      "type": "add_example_query",
+      "pattern_name": "descriptive_pattern_name",
+      "question": ["Korean question template with [placeholders]"],
+      "sql": [
+        "SELECT :param1 ",
+        "FROM :table ",
+        "WHERE :condition "
+      ],
+      "parameters": [
+        {{"name": "param1", "type_hint": "STRING", "description": ["설명"]}}
+      ],
+      "usage_guidance": ["When to use this pattern in Korean"],
+      "reasoning": "Helps N failures by teaching pattern X"
+    }}
+  ]
+}}
+```
+
+If no additions needed:
+```json
+{{
+  "analysis": {{
+    "missing_patterns_found": [],
+    "total_patterns_to_add": 0,
+    "reasoning": "All needed patterns already exist"
+  }},
+  "recommended_fixes": []
+}}
+```
+
+═══════════════════════════════════════════════════════════════════════════════
+
+**IMPORTANT:**
+- Create TEMPLATES that help MULTIPLE failures
+- Use Spark SQL syntax (DATE 'YYYY-MM-DD', single quotes)
+- SQL lines should end with space for formatting
+- Korean for question templates and usage_guidance
+- Prioritize patterns that help the MOST failures
+
+Return ONLY valid JSON. No additional text.

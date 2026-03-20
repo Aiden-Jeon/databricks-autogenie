@@ -1,0 +1,295 @@
+# TASK: Compare Genie Answer with Expected Answer
+
+You are an expert at evaluating whether a Genie Space (Databricks natural language to SQL system) answered a question correctly. Your job is to compare the expected answer with Genie's actual answer and determine if they are semantically equivalent.
+
+**COMPARISON PRIORITY:**
+1. **DATA RESULTS (preferred):** When comparing actual query results, focus on whether the DATA VALUES match
+2. **SQL (fallback):** Only compare SQL structure if result execution failed
+
+**WHY DATA COMPARISON IS BETTER:**
+- Different SQL can produce identical results (should PASS)
+- Similar SQL can produce different results (should FAIL)
+- Data comparison catches the truth that matters: "Did we get the right answer?"
+
+═══════════════════════════════════════════════════════════════════════════════
+
+## Question
+
+{question}
+
+## Expected Answer
+
+{expected_result}
+
+## Genie's Answer
+
+{genie_result}
+
+═══════════════════════════════════════════════════════════════════════════════
+
+## SQL Comparison Guidelines (FALLBACK - only when result execution failed)
+
+### Consider SQL EQUIVALENT when:
+
+1. **Same Tables, Different Aliases:**
+   - `FROM orders o` vs `FROM orders`
+   - `JOIN customers c` vs `JOIN customers AS cust`
+
+2. **Same Aggregation Logic:**
+   - `SUM(amount)` vs `SUM(order_amount)` (if columns have same data)
+   - `COUNT(*)` vs `COUNT(1)` vs `COUNT(id)`
+
+3. **Equivalent Filters:**
+   - `WHERE status = 'active'` vs `WHERE status IN ('active')`
+   - `WHERE date >= '2025-01-01'` vs `WHERE YEAR(date) = 2025 AND MONTH(date) >= 1`
+
+4. **Same Columns, Different Names/Order:**
+   - `SELECT name, age` vs `SELECT age, name` (unless ORDER BY matters)
+   - `SELECT revenue AS total` vs `SELECT revenue total`
+
+5. **Equivalent JOINs:**
+   - `INNER JOIN` vs `JOIN`
+   - `LEFT OUTER JOIN` vs `LEFT JOIN`
+   - Same join condition in different order
+
+6. **Whitespace and Formatting:**
+   - Any whitespace/newline/case differences
+
+### Consider SQL DIFFERENT when:
+
+1. **Wrong Table:**
+   - Querying `sales` when should query `orders`
+
+2. **Wrong Aggregation:**
+   - `SUM()` when should be `COUNT()`
+   - `AVG()` when should be `MAX()`
+   - Missing `GROUP BY` when needed
+
+3. **Wrong Filter:**
+   - Missing WHERE clause that's needed
+   - Wrong date range or conditions
+   - Wrong comparison operator
+
+4. **Missing JOINs:**
+   - Query doesn't join required tables
+   - Wrong join type (INNER vs LEFT)
+
+5. **Wrong Columns:**
+   - Selecting wrong columns entirely
+   - Missing required columns in output
+
+═══════════════════════════════════════════════════════════════════════════════
+
+## Data Result Comparison Guidelines (PRIMARY - when comparing query results)
+
+**This is the preferred comparison method.** Compare the actual data values returned by queries.
+
+### Consider EQUIVALENT when:
+
+1. **Numerical Precision:**
+   - Values match within reasonable rounding (e.g., 123.456 vs 123.46)
+   - Scientific notation vs decimal (e.g., 1.5e6 vs 1500000)
+
+2. **Date/Time Formats:**
+   - Different date formats for same date (e.g., "2025-01-29" vs "01/29/2025")
+   - Timestamps with/without timezone if time is the same
+
+3. **String Representations:**
+   - Case differences if semantically same (e.g., "Active" vs "active")
+   - Whitespace differences (e.g., "New York" vs "New  York")
+
+4. **NULL Handling:**
+   - NULL, None, null, <null> all represent missing values
+
+5. **Column Names:**
+   - Different aliases for same data (e.g., "total_revenue" vs "revenue_total")
+
+6. **Row Order:**
+   - Same data in different order (unless question asks for specific ordering)
+
+7. **Aggregate Results:**
+   - Same totals/counts/averages even if calculated differently
+
+### Consider DIFFERENT when:
+
+1. **Wrong Values:**
+   - Numbers are significantly different (not just rounding)
+   - Dates are different days/months/years
+   - Aggregates are fundamentally wrong
+
+2. **Wrong Aggregation:**
+   - SUM vs COUNT vs AVG (different operations)
+   - Different grouping levels
+
+3. **Incorrect Filtering:**
+   - Genie included/excluded wrong records **AND it changes the answer meaning**
+
+4. **Order Matters (only if question specifies):**
+   - If question asks for "top 10", the TOP items should match
+   - If question asks for "first/last", order matters
+
+5. **IMPORTANT - Row Count Alone is NOT Failure:**
+   - Row count mismatch is ONLY a failure if the missing/extra rows **fundamentally change the answer**
+   - If core data values match, PASS even if row counts differ slightly
+   - For aggregation questions (totals, averages), row count is often irrelevant
+
+═══════════════════════════════════════════════════════════════════════════════
+
+## Output Format
+
+Return your comparison as JSON with this EXACT structure:
+
+```json
+{{
+  "passed": true | false,
+  "confidence": "high" | "medium" | "low",
+  "reasoning": "Brief explanation of why answers are equivalent or different",
+  "differences": [
+    "List specific differences if passed=false, empty array if passed=true"
+  ],
+  "semantic_equivalence": "Explain why answers are/aren't semantically the same for this question"
+}}
+```
+
+### Examples
+
+**Example 1: PASS - Same values, different precision**
+```json
+{{
+  "passed": true,
+  "confidence": "high",
+  "reasoning": "Values match within rounding precision",
+  "differences": [],
+  "semantic_equivalence": "Expected shows 123.456 and Genie shows 123.46, which is the same value rounded to 2 decimal places. For business reporting, these are equivalent."
+}}
+```
+
+**Example 2: FAIL - Wrong aggregation**
+```json
+{{
+  "passed": false,
+  "confidence": "high",
+  "reasoning": "Genie used COUNT instead of SUM",
+  "differences": [
+    "Expected: total_revenue = 1500000 (sum of order amounts)",
+    "Genie: total_revenue = 50 (count of orders)"
+  ],
+  "semantic_equivalence": "The question asked for total revenue, which requires SUM of amounts. Genie counted rows instead, giving a completely different answer."
+}}
+```
+
+**Example 3: PASS - Same data, different order**
+```json
+{{
+  "passed": true,
+  "confidence": "high",
+  "reasoning": "Same data in different order, but question didn't specify ordering",
+  "differences": [],
+  "semantic_equivalence": "Both answers contain the same 10 customers with same revenue values. Question asked 'which customers' not 'top customers', so order doesn't matter."
+}}
+```
+
+**Example 4: FAIL - Missing rows**
+```json
+{{
+  "passed": false,
+  "confidence": "high",
+  "reasoning": "Genie is missing records from the expected result",
+  "differences": [
+    "Expected has 20 rows, Genie has 15 rows",
+    "Genie is missing customers with IDs: 101, 205, 308, 412, 567"
+  ],
+  "semantic_equivalence": "Expected result includes all customers, but Genie filtered some out. This is incorrect for the question asked."
+}}
+```
+
+**Example 5: PASS - Equivalent SQL (different syntax)**
+```json
+{{
+  "passed": true,
+  "confidence": "high",
+  "reasoning": "Both SQL queries will return the same data despite different syntax",
+  "differences": [],
+  "semantic_equivalence": "Expected uses 'SELECT SUM(amount) FROM orders WHERE status='completed'' and Genie uses 'SELECT SUM(order_amount) AS total FROM orders o WHERE o.status = 'completed''. Both query the same table with same filter and same aggregation. Column aliases and table aliases don't affect the result."
+}}
+```
+
+**Example 6: FAIL - SQL uses wrong aggregation**
+```json
+{{
+  "passed": false,
+  "confidence": "high",
+  "reasoning": "Genie used COUNT instead of SUM in the SQL query",
+  "differences": [
+    "Expected SQL: SELECT SUM(revenue) FROM sales",
+    "Genie SQL: SELECT COUNT(*) FROM sales",
+    "SUM gives total revenue, COUNT gives number of rows - completely different results"
+  ],
+  "semantic_equivalence": "The question asks for total revenue which requires summing values. Genie counted rows instead, which would give the number of transactions, not the revenue amount."
+}}
+```
+
+**Example 7: PASS - SQL with different column names but same data**
+```json
+{{
+  "passed": true,
+  "confidence": "medium",
+  "reasoning": "SQL queries target equivalent columns that contain the same data",
+  "differences": [],
+  "semantic_equivalence": "Expected uses 'customer_name' and Genie uses 'cust_name'. If these are the same column (just different aliases/references), the results are equivalent. Marking as medium confidence since column equivalence depends on schema."
+}}
+```
+
+═══════════════════════════════════════════════════════════════════════════════
+
+## Important Notes
+
+1. **Context Matters:** Consider what the question is asking for
+2. **Be Lenient on Format:** Focus on semantic meaning, not representation
+3. **Be Lenient on Data:** Minor differences are acceptable if the core answer is correct
+4. **PASS if Close Enough:** If Genie's answer would reasonably satisfy the user's question, mark as PASS
+5. **Explain Clearly:** Provide clear reasoning for your decision
+6. **High Confidence:** Only use "low" confidence if genuinely ambiguous
+
+## Leniency Guidelines (IMPORTANT)
+
+**Mark as PASS when:**
+- Genie answers the core question correctly even if extra columns/info are included
+- Minor differences in filtering that don't change the main result
+- Different but valid approaches to the same question
+- Results have same top items even if counts/values differ slightly
+- SQL targets same tables and has similar logic even if not exact match
+- **ROW COUNT DIFFERS BUT DATA IS SEMANTICALLY EQUIVALENT:**
+  - Same aggregation result (e.g., both return total=1500000)
+  - Same top N items even if total rows differ
+  - Minor row differences due to NULL handling or date boundaries
+  - Rows differ but answer still correctly responds to the question
+
+**Only mark as FAIL when:**
+- Genie completely misunderstands the question
+- Wrong aggregation type (SUM vs COUNT) that changes meaning
+- Missing critical filter that changes the result significantly
+- Wrong table entirely
+- Answer is nonsensical or clearly wrong
+- **Row count differs AND the missing/extra rows fundamentally change the answer**
+
+## Row Count Philosophy
+
+**Row count alone is NOT a failure criterion.**
+
+Ask yourself: "Does Genie's answer correctly respond to the user's question?"
+
+| Scenario | Verdict |
+|----------|---------|
+| Expected 100 rows, Genie 98 rows, but same aggregates/totals | **PASS** |
+| Expected 10 rows, Genie 10 rows, same data different order | **PASS** |
+| Expected "total revenue = 1.5M", Genie "total revenue = 1.5M" | **PASS** (row count irrelevant) |
+| Expected top 10, Genie shows top 10 with same items | **PASS** |
+| Expected 100 rows, Genie 50 rows, missing half the data | **FAIL** (fundamental difference) |
+| Expected specific customer, Genie returns different customer | **FAIL** (wrong answer) |
+
+**Focus on SEMANTIC CORRECTNESS, not exact row matching.**
+
+═══════════════════════════════════════════════════════════════════════════════
+
+Return ONLY valid JSON, no additional text or explanations outside the JSON.

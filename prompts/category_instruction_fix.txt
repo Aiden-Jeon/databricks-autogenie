@@ -1,0 +1,198 @@
+# Category: Instruction Fix - Batch Analysis
+
+You are a Genie Space expert analyzing ALL benchmark failures together.
+Your task: Generate **TEXT INSTRUCTION fixes** that address patterns across ALL failures.
+
+═══════════════════════════════════════════════════════════════════════════════
+## WHAT IS GENIE SPACE?
+═══════════════════════════════════════════════════════════════════════════════
+
+Genie Space is Databricks' natural language to SQL system. Users ask questions in
+natural language (often Korean), and Genie generates SQL queries.
+
+**Core Principle: METADATA QUALITY = GENIE QUALITY**
+Genie understands data through metadata. Poor metadata → poor results.
+
+═══════════════════════════════════════════════════════════════════════════════
+## TEXT INSTRUCTIONS BEST PRACTICES
+═══════════════════════════════════════════════════════════════════════════════
+
+### What are Text Instructions?
+High-level context and rules reinforcement that apply across the entire Genie Space.
+
+**IMPORTANT:** Only ONE text_instruction block is allowed. New content REPLACES existing.
+
+### What to Include in Text Instructions:
+- Overview of Genie Space purpose and scope
+- Entity relationships and lifecycles
+- Business rules that apply across multiple components
+- Default filters (game_code, date ranges)
+- Date interpretation conventions ("최근 7일" → SQL)
+- Data deduplication rules (snapshot table handling)
+- Platform-specific table guidance
+
+### When to Use Instructions (vs Other Fixes):
+✅ **USE instruction when:**
+- Business rule applied consistently across MULTIPLE queries
+- Date/time interpretation conventions needed globally
+- Default filter behaviors (game_code, date ranges)
+- Calculation definitions that apply globally
+- Data deduplication rules (ROW_NUMBER patterns)
+
+❌ **DON'T use instruction when:**
+- Problem is term matching → use synonym instead
+- Problem is specific query pattern → use sample query instead
+- Rule only applies to one column → use column description instead
+
+### Common Issues Fixed by Instructions:
+| Issue | Example Instruction Content |
+|-------|----------------------------|
+| Missing default filter | "기본 카테고리 필터: product_category = 'electronics'" |
+| Wrong date interpretation | "'최근 7일' = event_date >= CURRENT_DATE - INTERVAL 7 DAYS" |
+| Missing deduplication | "스냅샷 테이블은 ROW_NUMBER() 로 최신 데이터만 사용" |
+
+═══════════════════════════════════════════════════════════════════════════════
+## STEP 1: LEARN DOMAIN RULES FROM ALL BENCHMARKS
+═══════════════════════════════════════════════════════════════════════════════
+
+Study ALL benchmarks to discover business rules and conventions:
+
+{all_benchmarks}
+
+### Rule Discovery Tasks:
+
+1. **Default Filter Patterns:**
+   - Are certain filters applied consistently? (e.g., game_code, status)
+   - What WHERE clauses appear in most queries?
+   - Are there implicit filters users don't mention but SQL includes?
+
+2. **Date Interpretation Rules:**
+   - How do Korean date terms map to SQL?
+     "최근 7일" → what INTERVAL?
+     "이번 달" → what DATE_TRUNC?
+   - What date ranges are standard?
+   - Are there default date columns?
+
+3. **Calculation Conventions:**
+   - Are there standard formulas? (e.g., DAU = SUM(active_user))
+   - Safe division patterns? (try_divide vs /)
+   - Type casting conventions? (::decimal(38,2))
+
+4. **Data Deduplication Rules:**
+   - Which tables need ROW_NUMBER() deduplication?
+   - What PARTITION BY / ORDER BY patterns exist?
+   - Are there snapshot tables that need special handling?
+
+5. **Aggregation Conventions:**
+   - Default GROUP BY patterns?
+   - Standard window function usage?
+   - Common ORDER BY patterns?
+
+**Output: Domain Rule Book**
+Create a mental model of business rules that should be documented as instructions.
+
+═══════════════════════════════════════════════════════════════════════════════
+## ALL FAILURES TO ANALYZE ({failure_count} total)
+═══════════════════════════════════════════════════════════════════════════════
+
+{all_failures}
+
+═══════════════════════════════════════════════════════════════════════════════
+## CURRENT SPACE CONFIGURATION
+═══════════════════════════════════════════════════════════════════════════════
+
+{space_config}
+
+═══════════════════════════════════════════════════════════════════════════════
+## YOUR ANALYSIS TASK
+═══════════════════════════════════════════════════════════════════════════════
+
+Analyze ALL failures above and identify:
+
+1. **Business Rules Missing:**
+   - What rules are applied in expected SQL but Genie missed?
+   - Count how many failures share the same missing rule
+
+2. **Date/Time Conventions:**
+   - "최근 7일", "30일", "한 달" - how should these be interpreted?
+   - Are there default date ranges?
+
+3. **Default Filters:**
+   - game_code filters?
+   - Status filters?
+   - Date range defaults?
+
+4. **Data Deduplication Rules:**
+   - Which tables need ROW_NUMBER deduplication?
+   - Snapshot table handling
+
+5. **Platform-Specific Logic:**
+   - Discord vs Steam data handling
+   - Cross-platform queries
+
+**CRITICAL:** Only ONE text_instruction block is allowed. Your fix REPLACES existing.
+Create a comprehensive instruction that addresses ALL identified patterns.
+
+═══════════════════════════════════════════════════════════════════════════════
+## OUTPUT FORMAT
+═══════════════════════════════════════════════════════════════════════════════
+
+Return JSON:
+
+```json
+{{
+  "analysis": {{
+    "missing_rules_found": [
+      {{"rule": "description", "failure_count": N, "examples": ["failure_id1", "failure_id2"]}}
+    ],
+    "total_failures_addressable": N,
+    "reasoning": "Explanation of what instruction content will fix"
+  }},
+  "recommended_fixes": [
+    {{
+      "type": "update_text_instruction",
+      "content": [
+        "## 기본 조회 규칙",
+        "- 기본 카테고리 필터: product_category = 'electronics' (별도 지정 없으면)",
+        "- 기본 조회 기간: 최근 30일",
+        "",
+        "## 날짜 해석",
+        "- '최근 7일' = event_date >= CURRENT_DATE - INTERVAL 7 DAYS",
+        "- '최근 30일' = event_date >= CURRENT_DATE - INTERVAL 30 DAYS",
+        "",
+        "## 데이터 중복 제거 (스냅샷 테이블)",
+        "- store_appreviews, community_discussions_* 테이블은 스냅샷 데이터",
+        "- ROW_NUMBER() OVER (PARTITION BY entity_id ORDER BY event_date DESC) 사용",
+        "- WHERE rn = 1 필터로 최신 데이터만 조회",
+        "",
+        "## 플랫폼별 테이블",
+        "- Discord: message, reaction, channel_list",
+        "- Steam: store_appreviews, steam_apps, community_discussions_*"
+      ],
+      "reasoning": "Addresses N failures by documenting missing business rules"
+    }}
+  ]
+}}
+```
+
+If no instruction fix is needed:
+```json
+{{
+  "analysis": {{
+    "missing_rules_found": [],
+    "total_failures_addressable": 0,
+    "reasoning": "All rules already documented or issues are elsewhere"
+  }},
+  "recommended_fixes": []
+}}
+```
+
+═══════════════════════════════════════════════════════════════════════════════
+
+**IMPORTANT:**
+- Analyze ALL failures together, not one-by-one
+- Create ONE comprehensive instruction that helps the MOST failures
+- Use Korean for instruction content
+- Be specific and actionable
+
+Return ONLY valid JSON. No additional text.

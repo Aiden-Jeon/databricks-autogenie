@@ -1,0 +1,175 @@
+# Instruction Analysis - Context-Informed Fix Generation
+
+You are a Genie Space expert analyzing a benchmark failure. Generate **TEXT INSTRUCTION fixes** informed by the FULL domain context.
+
+═══════════════════════════════════════════════════════════════════════════════
+## DOMAIN CONTEXT (All Benchmarks)
+═══════════════════════════════════════════════════════════════════════════════
+
+These are ALL the questions users will ask (korean_question) and their expected SQL.
+Use this to understand:
+- What business rules are applied consistently across queries
+- What date conventions are used ("최근 7일", "30일", etc.)
+- What default filters appear repeatedly (game_code, status, etc.)
+- What calculation patterns are standard
+
+{all_benchmarks}
+
+═══════════════════════════════════════════════════════════════════════════════
+## BEST PRACTICES REFERENCE
+═══════════════════════════════════════════════════════════════════════════════
+
+### What are Text Instructions?
+
+Text instructions provide high-level guidance and business rules that apply across the entire Genie Space. They help Genie understand domain-specific conventions.
+
+**Important:** Only ONE text instruction block is allowed. New content REPLACES existing (not appends).
+
+### When to Add Instructions
+
+✅ **ADD instruction when:**
+- Business rule applied consistently but not documented
+- Date/time interpretation conventions needed
+- Default filter behaviors (game_code, date ranges)
+- Calculation definitions that apply globally
+- Data deduplication rules (ROW_NUMBER patterns)
+
+❌ **DON'T add instruction when:**
+- Problem is term matching (use synonym instead)
+- Problem is specific query pattern (use sample query instead)
+- Rule only applies to one column (use column description instead)
+
+### Instruction Categories for This Domain
+
+**1. Default Filters (from benchmark patterns):**
+```
+- 기본 카테고리 필터: product_category = 'electronics' 적용
+- 기본 조회 기간: 최근 30일 (별도 지정 없으면)
+```
+
+**2. Date Interpretation (Korean → SQL):**
+```
+- '최근 7일' = event_date >= CURRENT_DATE - INTERVAL 7 DAYS
+- '최근 30일' = event_date >= CURRENT_DATE - INTERVAL 30 DAYS
+- '일주일' = 7일
+- '한 달' = 30일
+```
+
+**3. Data Deduplication (snapshot tables):**
+```
+- store_appreviews, community_discussions_* 테이블은 스냅샷 데이터
+- ROW_NUMBER() OVER (PARTITION BY entity_id ORDER BY event_date DESC) 로 최신 데이터만 사용
+- WHERE rn = 1 필터 적용
+```
+
+**4. Platform-Specific Tables:**
+```
+- Discord 데이터: message, reaction, channel_list 테이블 사용
+- Steam 데이터: store_appreviews, steam_apps, community_discussions_* 테이블 사용
+- 크로스 플랫폼 질문: UNION으로 결합
+```
+
+**5. Aggregation Conventions:**
+```
+- 리액션/추천 집계 시 COALESCE(SUM(count), 0) 사용 (NULL → 0)
+- 소수점 반올림: ROUND(value, 2)
+```
+
+═══════════════════════════════════════════════════════════════════════════════
+## FAILED BENCHMARK TO FIX
+═══════════════════════════════════════════════════════════════════════════════
+
+**Korean Question (what user asked):**
+{question}
+
+**Expected SQL (correct answer):**
+{expected_sql}
+
+**Genie's Generated SQL (what Genie produced):**
+{genie_sql}
+
+**Current Space Configuration:**
+{space_config}
+
+═══════════════════════════════════════════════════════════════════════════════
+## YOUR ANALYSIS
+═══════════════════════════════════════════════════════════════════════════════
+
+Think through:
+
+1. **Business Rule Analysis:**
+   - Compare expected SQL vs Genie SQL
+   - What rule did Genie miss? (filter, date handling, deduplication, etc.)
+   - Is this rule applied in OTHER benchmarks too?
+
+2. **Cross-Benchmark Patterns:**
+   - Scan ALL benchmarks for this same rule
+   - Count how many benchmarks use this pattern
+   - High frequency = important rule to document
+
+3. **Existing Instructions:**
+   - Is this rule already in text_instructions?
+   - If yes, does it need reinforcement or clarification?
+
+4. **Global vs Local:**
+   - Does this rule apply to many queries? → instruction
+   - Does it apply to one column? → column description instead
+
+═══════════════════════════════════════════════════════════════════════════════
+## OUTPUT FORMAT
+═══════════════════════════════════════════════════════════════════════════════
+
+Return JSON:
+
+```json
+{{
+  "analysis": {{
+    "missing_rule": "Description of the rule Genie missed",
+    "rule_frequency": "Number of benchmarks using this rule",
+    "rule_category": "default_filter | date_convention | deduplication | aggregation | platform",
+    "rule_already_documented": true | false,
+    "rule_is_global": true | false,
+    "reasoning": "Explanation"
+  }},
+  "needs_instruction": true | false,
+  "recommended_fixes": [
+    {{
+      "type": "update_text_instruction",
+      "content": [
+        "## 규칙 카테고리",
+        "- 구체적인 규칙 1",
+        "- 구체적인 규칙 2",
+        "- 구체적인 규칙 3"
+      ],
+      "reasoning": "Why this instruction helps"
+    }}
+  ]
+}}
+```
+
+If NO instruction is needed:
+```json
+{{
+  "analysis": {{
+    "missing_rule": "",
+    "rule_frequency": 0,
+    "rule_category": "",
+    "rule_already_documented": true,
+    "rule_is_global": false,
+    "reasoning": "Rule already documented / Rule is local (use description) / Issue is elsewhere"
+  }},
+  "needs_instruction": false,
+  "recommended_fixes": []
+}}
+```
+
+═══════════════════════════════════════════════════════════════════════════════
+
+**IMPORTANT:**
+- Instructions should cover rules that help MULTIPLE benchmarks
+- Use Korean for instruction content
+- Be specific and actionable
+- Include examples where helpful
+- Remember: only ONE text_instruction block allowed (this replaces existing)
+
+Return ONLY valid JSON. No additional text.
